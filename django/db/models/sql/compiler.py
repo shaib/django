@@ -853,7 +853,7 @@ class SQLInsertCompiler(SQLCompiler):
                 fetch_func = self.connection.ops.return_values
                 fetch_kwargs = {
                     'nvars': len(self.returning_fields) + 1,
-                    'fields': self.returning_fields
+                    'fields': [opts.pk] + self.returning_fields
                 }
         elif self.return_id:
             if self.connection.features.can_return_id_from_insert:

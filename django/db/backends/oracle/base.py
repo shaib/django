@@ -77,6 +77,8 @@ if int(Database.version.split('.', 1)[0]) >= 5 and \
 else:
     convert_unicode = force_bytes
 
+# A little aliasing extension to support both Py2 and Py3
+Database_STRING = Database.STRING if six.PY3 else Database.UNICODE
 
 class DatabaseFeatures(BaseDatabaseFeatures):
     empty_fetchmany_value = ()
@@ -86,6 +88,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     has_select_for_update = True
     has_select_for_update_nowait = True
     can_return_id_from_insert = True
+    can_return_multiple_fields = True
     allow_sliced_subqueries = False
     supports_subqueries_in_group_by = False
     supports_transactions = True
@@ -274,6 +277,10 @@ WHEN (new.%(col_name)s IS NULL)
     def fetch_returned_insert_id(self, cursor):
         return int(cursor._insert_id_var.getvalue())
 
+    def fetch_returned_values(self, cursor):
+        r_flds = [var.getvalue() for var in cursor._returned_vars]
+        return r_flds
+        
     def field_cast_sql(self, db_type, internal_type):
         if db_type and db_type.endswith('LOB'):
             return "DBMS_LOB.SUBSTR(%s)"
@@ -359,6 +366,14 @@ WHEN (new.%(col_name)s IS NULL)
 
     def return_insert_id(self):
         return "RETURNING %s INTO %%s", (InsertIdVar(),)
+
+    def return_values(self, fields, **kw):
+        nvars = len(fields)
+        fields_string = ", ".join(["%s"] * nvars)        
+        vars_string = ", ".join(["%%s"] * nvars)
+        clause = "RETURNING %s into %s" % (fields_string, vars_string)
+        vars = [ReturnedFieldVar(field) for field in fields]
+        return clause, vars
 
     def savepoint_create_sql(self, sid):
         return convert_unicode("SAVEPOINT " + self.quote_name(sid))
@@ -771,6 +786,48 @@ class InsertIdVar(object):
         return param
 
 
+class ReturnedFieldVar(object):
+    """
+    A cursor variable that can be passed to Cursor.execute as a
+    parameter for retrieving field values from insert or update
+    statements
+    """
+    var_data_types = {
+        'AutoField': Database.NUMBER,
+        'BinaryField': Database.BLOB,
+        'BooleanField': Database.NUMBER,
+        'CharField': Database_STRING,
+        'CommaSeparatedIntegerField': Database_STRING,
+        'DateField': Database.DATETIME,
+        'DateTimeField': Database.DATETIME,
+        'DecimalField': Database.NUMBER,
+        'FileField': Database_STRING,
+        'FilePathField': Database_STRING,
+        'FloatField': Database.NUMBER,
+        'IntegerField': Database.NUMBER,
+        'BigIntegerField': Database.NUMBER,
+        'IPAddressField': Database_STRING,
+        'GenericIPAddressField': Database_STRING,
+        'NullBooleanField': Database.NUMBER,
+        'OneToOneField': Database.NUMBER,
+        'PositiveIntegerField': Database.NUMBER,
+        'PositiveSmallIntegerField': Database.NUMBER,
+        'SlugField': Database_STRING,
+        'SmallIntegerField': Database.NUMBER,
+        'TextField': Database.NCLOB,
+        'TimeField': Database.DATETIME,
+        'URLField': Database_STRING,
+    }
+    def __init__(self, field):
+        self.field = field
+
+    def bind_parameter(self, cursor):
+        var_type = self.var_data_types[self.field.get_internal_type()]
+        param = cursor.cursor.var(var_type)
+        cursor._returned_vars.append(param)
+        return param
+
+
 class FormatStylePlaceholderCursor(object):
     """
     Django uses "format" (e.g. '%s') style placeholders, but Oracle uses ":var"
@@ -841,6 +898,7 @@ class FormatStylePlaceholderCursor(object):
         return query, self._format_params(params)
 
     def execute(self, query, params=None):
+        self._returned_vars = []
         query, params = self._fix_for_params(query, params)
         self._guess_input_sizes([params])
         try:

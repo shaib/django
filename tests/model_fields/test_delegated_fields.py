@@ -15,7 +15,7 @@ class UpdateOnlyTests(test.TestCase):
 
     def test_field_is_ignored_on_insert(self):
         UpdateModel.objects.create(f='text')
-        self.assertIsNone(UpdateModel.objects.all()[0].f)
+        self.assertFalse(UpdateModel.objects.all()[0].f)
 
     def test_field_is_set_on_update(self):
         m = UpdateModel.objects.create(f='text')
@@ -41,7 +41,7 @@ class SelectOnlyTests(test.TestCase):
 
     def test_field_is_ignored_on_insert(self):
         SelectModel.objects.create(f='text')
-        self.assertIsNone(SelectModel.objects.all()[0].f)
+        self.assertFalse(SelectModel.objects.all()[0].f)
 
     def test_field_is_ignored_on_update(self):
         m = SelectModel.objects.create(f='text')
@@ -118,7 +118,7 @@ class RefreshDbDefaultFieldsOnInsert(test.TestCase):
     def test_force_fetch_is_false_does_not_refresh_fields(self):
         m = SelectModel()
         m.save(force_fetch=False)
-        self.assertIsNone(m.f)
+        self.assertFalse(m.f)
 
     def test_force_fetch_is_true_refreshes_fields(self):
         m = SelectModel()
@@ -133,7 +133,7 @@ class RefreshDbDefaultFieldsOnUpdate(test.TestCase):
         m.save()
         SelectModel.objects.update(f='text')
         m.save()
-        self.assertIsNone(m.f)
+        self.assertFalse(m.f)
 
     def test_force_fetch_is_true_refreshes_fields(self):
         m = RefreshModel()
@@ -148,4 +148,4 @@ class RefreshDbDefaultFieldsOnUpdate(test.TestCase):
         m.save()
         SelectModel.objects.update(f='text')
         m.save(force_fetch=True)
-        self.assertIsNone(m.f)
+        self.assertFalse(m.f)
