@@ -411,14 +411,8 @@ class BaseDatabaseSchemaEditor(object):
         self.execute(sql, params)
         # Drop the default if we need to
         # (Django usually does not use in-database defaults)
-        if not self.skip_default(field) and field.default is not None:
-            sql = self.sql_alter_column % {
-                "table": self.quote_name(model._meta.db_table),
-                "changes": self.sql_alter_column_no_default % {
-                    "column": self.quote_name(field.column),
-                }
-            }
-            self.execute(sql)
+        if not self.skip_default(field) and field.has_default():
+            self._alter_column_drop_default(model, field)
         # Add an index, if required
         if field.db_index and not field.unique:
             self.deferred_sql.append(
@@ -777,14 +771,8 @@ class BaseDatabaseSchemaEditor(object):
             )
         # Drop the default if we need to
         # (Django usually does not use in-database defaults)
-        if not self.skip_default(new_field) and new_field.default is not None:
-            sql = self.sql_alter_column % {
-                "table": self.quote_name(model._meta.db_table),
-                "changes": self.sql_alter_column_no_default % {
-                    "column": self.quote_name(new_field.column),
-                }
-            }
-            self.execute(sql)
+        if not self.skip_default(new_field) and new_field.has_default():
+            self._alter_column_drop_default(model, new_field)
         # Reset connection if required
         if self.connection.features.connection_persists_old_columns:
             self.connection.close()
@@ -809,6 +797,18 @@ class BaseDatabaseSchemaEditor(object):
             ),
             [],
         )
+
+    def _alter_column_drop_default(self, model, field):
+        """
+        Hook to specialize the action of dropping a default
+        """
+        sql = self.sql_alter_column % {
+            "table": self.quote_name(model._meta.db_table), 
+            "changes": self.sql_alter_column_no_default % {
+                "column": self.quote_name(field.column), 
+            }
+        }
+        self.execute(sql)
 
     def _alter_many_to_many(self, model, old_field, new_field, strict):
         """

@@ -15,7 +15,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     sql_alter_column_null = "MODIFY %(column)s NULL"
     sql_alter_column_not_null = "MODIFY %(column)s NOT NULL"
     sql_alter_column_default = "MODIFY %(column)s DEFAULT %(default)s"
-    sql_alter_column_no_default = "MODIFY %(column)s DEFAULT NULL"
+    sql_alter_column_no_default = "MODIFY %(column)s %(type)s DEFAULT (NULL)"
     sql_delete_column = "ALTER TABLE %(table)s DROP COLUMN %(column)s"
     sql_delete_table = "DROP TABLE %(table)s CASCADE CONSTRAINTS"
 
@@ -59,6 +59,36 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 self._alter_field_lob_workaround(model, old_field, new_field)
             else:
                 raise
+
+    def _alter_column_drop_default(self, model, field):
+        """
+        Oracle needs special care when dropping defaults.
+        If we just change the default, on Oracle 11.2.0.1 we run into #23073;
+        If we just include the old definition (sans default) and add "DEFAULT NULL", 
+        we generate the obscure ora-30649 "missing DIRECTORY keyword" which really
+        means "wrong order of clauses";
+        If we just use the definition without default, we get ora-01442/ora-01451
+        for attempting to change the nullity into the existing nullity.
+        """
+        sql = self.sql_alter_column % {
+            "table": self.quote_name(model._meta.db_table), 
+            "changes": self.sql_alter_column_no_default % {
+                "column": self.quote_name(field.column), 
+                "type": field.db_type(connection=self.connection)
+            }
+        }
+        self.execute(sql)
+        self.connection.close()
+        # And again, this time not mentioning the default at all
+        sql = self.sql_alter_column % {
+            "table": self.quote_name(model._meta.db_table), 
+            "changes": self.sql_alter_column_type % {
+                "column": self.quote_name(field.column), 
+                "type": field.db_type(connection=self.connection)
+            }
+        }
+        self.execute(sql)
+        self.connection.close()
 
     def _alter_field_lob_workaround(self, model, old_field, new_field):
         """
