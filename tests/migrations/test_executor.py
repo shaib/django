@@ -642,3 +642,71 @@ class ExecutorUnitTests(TestCase):
         plan = executor.migration_plan({a1})
 
         self.assertEqual(plan, [])
+
+    def test_reject_holes_in_history(self):
+        """
+        If the history is inconsistent with the sources, cry foul
+
+        a: 1 <--- 2 <--- 3
+
+        If a2 is applied already and a1 is not, and we're asked to migrate to
+        a3, then something is very wrong and we should not proceed
+        """
+        a1_impl = FakeMigration('a1')
+        a1 = ('a', '1')
+        a2_impl = FakeMigration('a2')
+        a2 = ('a', '2')
+        a3_impl = FakeMigration('a3')
+        a3 = ('a', '3')
+        graph = MigrationGraph()
+        graph.add_node(a1, a1_impl)
+        graph.add_node(a2, a2_impl)
+        graph.add_node(a3, a3_impl)
+        graph.add_dependency(None, a2, a1)
+        graph.add_dependency(None, a3, a2)
+
+        executor = MigrationExecutor(None)
+        executor.loader = FakeLoader(graph, {a2})
+
+        with self.assertRaises(Exception):
+            plan = executor.migration_plan({a3})
+            #print "plan:", plan
+
+    def test_triple_past_dependency(self):
+        """
+        Make sure a third dependency is respected
+
+        a: 1 <--\
+           2 <---+ 4 <--- 5
+           3 <--/
+
+        If a1, a2 and a4 are applied already and a3 is not,
+        and this isn't an error (see previous test), when asked to migrate to
+        a5, then at least we should run a3
+        """
+        a1_impl = FakeMigration('a1')
+        a1 = ('a', '1')
+        a2_impl = FakeMigration('a2')
+        a2 = ('a', '2')
+        a3_impl = FakeMigration('a3')
+        a3 = ('a', '3')
+        a4_impl = FakeMigration('a4')
+        a4 = ('a', '4')
+        a5_impl = FakeMigration('a5')
+        a5 = ('a', '5')
+        graph = MigrationGraph()
+        graph.add_node(a1, a1_impl)
+        graph.add_node(a2, a2_impl)
+        graph.add_node(a3, a3_impl)
+        graph.add_node(a4, a4_impl)
+        graph.add_node(a5, a5_impl)
+        graph.add_dependency(None, a4, a1)
+        graph.add_dependency(None, a4, a2)
+        graph.add_dependency(None, a4, a3)
+
+        executor = MigrationExecutor(None)
+        executor.loader = FakeLoader(graph, {a1, a2, a4})
+
+        plan = executor.migration_plan({a5})
+
+        self.assertIn((a3_impl, False), plan)
