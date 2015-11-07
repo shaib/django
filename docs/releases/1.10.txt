@@ -142,6 +142,12 @@ CSRF
 * The default :setting:`CSRF_FAILURE_VIEW`, ``views.csrf.csrf_failure()`` now
   accepts an optional ``template_name`` parameter, defaulting to
   ``'403_csrf.html'``, to control the template used to render the page.
+* The CSRF protection scheme was changed so that the form token value is changed on every
+  request (while keeping an invariant nonce which can be used to validate them).
+
+  To make this easier, we now force CSRF cookie values to be strings of
+  64 alphanumerics (existing cookie values, made of 32 alphanumerics, will
+  be transparently replaced when first used).
 
 Database backends
 ^^^^^^^^^^^^^^^^^
@@ -339,6 +345,11 @@ Miscellaneous
 
 * ``utils.version.get_version()`` returns :pep:`440` compliant release
   candidate versions (e.g. '1.10rc1' instead of '1.10c1').
+* CSRF token values are now required to be strings of 64 alphanumerics;
+  values of 32 alphanumerics, as set by older versions of Django by default,
+  are automatically replaced by strings of 64 characters. Other values
+  are considered invalid; this should only affect developers or users who
+  replace these tokens explicitly.
 
 .. _deprecated-features-1.10:
 

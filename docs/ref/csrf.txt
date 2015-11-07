@@ -234,20 +234,33 @@ The CSRF protection is based on the following things:
 1. A CSRF cookie that is set to a random value (a session independent nonce, as
    it is called), which other sites will not have access to.
 
-   This cookie is set by ``CsrfViewMiddleware``.  It is meant to be permanent,
-   but since there is no way to set a cookie that never expires, it is sent with
+   This cookie is set by ``CsrfViewMiddleware``.  It is sent with
    every response that has called ``django.middleware.csrf.get_token()``
-   (the function used internally to retrieve the CSRF token).
+   (the function used internally to retrieve the CSRF token), if it
+   wasn't already set on the request.
+
+   In order to protect against `BREACH`_ type attacks, the token is
+   not simply the nonce; a random pad is added to the nonce and used
+   to scramble it.
+
+.. _BREACH: http://breachattack.com/
 
 2. A hidden form field with the name 'csrfmiddlewaretoken' present in all
-   outgoing POST forms.  The value of this field is the value of the CSRF
-   cookie.
+   outgoing POST forms.  The value of this field is, again, the value of
+   the nonce, with a pad which is both added to it and used to scramble
+   it. The pad is regenerated on every call to ``get_token()``,
+   so the form field value is changed in every such response.
 
    This part is done by the template tag.
 
 3. For all incoming requests that are not using HTTP GET, HEAD, OPTIONS or
    TRACE, a CSRF cookie must be present, and the 'csrfmiddlewaretoken' field
    must be present and correct. If it isn't, the user will get a 403 error.
+
+   When validating the 'csrfmiddlewaretoken' field value, it is only the nonce
+   which is compared with the nonce in the cookie value, and not the full token.
+   This allows the use of ever-changing tokens: While each request may use
+   its own token, the nonce remains common to all.
 
    This check is done by ``CsrfViewMiddleware``.
 
@@ -280,6 +293,11 @@ methods are assumed to be unsafe, for maximum protection.
 .. versionchanged:: 1.9
 
     Checking against the :setting:`CSRF_COOKIE_DOMAIN` setting was added.
+
+.. versionchanged:: 1.10
+
+   Added padding to the token and started changing it with each request
+   to protect against `BREACH`_ type attacks.
 
 Caching
 =======
