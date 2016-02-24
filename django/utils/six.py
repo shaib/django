@@ -873,7 +873,6 @@ sys.meta_path.append(_importer)
 if PY3:
     memoryview = memoryview
     buffer_types = (bytes, bytearray, memoryview)
-    from string import ascii_letters
 else:
     # memoryview and buffer are not strictly equivalent, but should be fine for
     # django core usage (mainly BinaryField). However, Jython doesn't support
@@ -883,4 +882,3 @@ else:
     else:
         memoryview = buffer
     buffer_types = (bytearray, memoryview)
-    from string import letters as ascii_letters

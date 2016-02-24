@@ -8,7 +8,7 @@ from __future__ import unicode_literals
 
 import logging
 import re
-from string import digits
+import string
 
 from django.conf import settings
 from django.core.urlresolvers import get_callable
@@ -16,7 +16,6 @@ from django.utils.cache import patch_vary_headers
 from django.utils.crypto import constant_time_compare, get_random_string
 from django.utils.encoding import force_text
 from django.utils.http import is_same_domain
-from django.utils.six import ascii_letters
 from django.utils.six.moves.urllib.parse import urlparse
 
 logger = logging.getLogger('django.request')
@@ -30,7 +29,7 @@ REASON_INSECURE_REFERER = "Referer checking failed - Referer is insecure while h
 
 CSRF_NONCE_LENGTH = 32
 CSRF_TOKEN_LENGTH = 2 * CSRF_NONCE_LENGTH
-CSRF_ALLOWED_CHARS = ascii_letters + digits
+CSRF_ALLOWED_CHARS = string.ascii_letters + string.digits
 
 
 def _get_failure_view():
@@ -46,9 +45,8 @@ def _get_new_csrf_nonce():
 
 def _pad_cipher_nonce(nonce):
     """
-    Given a nonce, generate a token by adding a pad and using it also to encrypt the nonce
-
-    We assume the nonce is a string of CSRF_ALLOWED_CHARS
+    Given a nonce (assumed to be a string of CSRF_ALLOWED_CHARS), generate a
+    token by adding a pad and using it to encrypt the nonce.
     """
     pad = _get_new_csrf_nonce()
     chars = CSRF_ALLOWED_CHARS
@@ -59,17 +57,15 @@ def _pad_cipher_nonce(nonce):
 
 def _unpad_cipher_token(token):
     """
-    Given a token, assume its first half is a pad and use it to decrypt the second half
-    to produce the original nonce
-
-    We assume the token is a string of CSRF_ALLOWED_CHARS,
-    of length CSRF_TOKEN_LENGTH = 2*CSRF_NONCE_LENGTH
+    Given a token (assumed to be a string of CSRF_ALLOWED_CHARS, of length
+    CSRF_TOKEN_LENGTH, and that its first half is a pad), use it to decrypt the
+    second half to produce the original nonce.
     """
     pad = token[:CSRF_NONCE_LENGTH]
     token = token[CSRF_NONCE_LENGTH:]
     chars = CSRF_ALLOWED_CHARS
     pairs = zip([chars.index(x) for x in token], [chars.index(x) for x in pad])
-    nonce = ''.join(chars[x - y] for x, y in pairs)  # Note negative values are ok
+    nonce = ''.join(chars[x - y] for x, y in pairs)  # Note negative values arfe ok
     return nonce
 
 
@@ -115,10 +111,10 @@ def _sanitize_token(token):
     elif len(token) == CSRF_TOKEN_LENGTH:
         return token
     elif len(token) == CSRF_NONCE_LENGTH:
-        # For backwards compatibility, we accept such values as unpadded nonces
-        # It is easier to just pad here and be consistent later, rather than
-        # add different code paths in the checks -- although that might be a tad
-        # more efficient.
+        # For backwards compatibility, accept such values as unpadded nonces.
+        # It's easier to pad here and be consistent later, rather than add
+        # different code paths in the checks, although that might be a tad more
+        # efficient.
         return _pad_cipher_nonce(token)
     return None
 
@@ -126,10 +122,12 @@ def _sanitize_token(token):
 def _compare_padded_tokens(request_csrf_token, csrf_token):
     if not(request_csrf_token and csrf_token):
         return False
-    # We assume both arguments to be sanitized -- that is, either strings
-    # of length CSRF_TOKEN_LENGTH, all CSRF_ALLOWED_CHARS, or Falsey
-    return constant_time_compare(_unpad_cipher_token(request_csrf_token),
-                                 _unpad_cipher_token(csrf_token))
+    # Assume both arguments to be sanitized -- that is, either strings of
+    # length CSRF_TOKEN_LENGTH, all CSRF_ALLOWED_CHARS, or Falsey.
+    return constant_time_compare(
+        _unpad_cipher_token(request_csrf_token),
+        _unpad_cipher_token(csrf_token),
+    )
 
 
 class CsrfViewMiddleware(object):
@@ -168,10 +166,10 @@ class CsrfViewMiddleware(object):
             cookie_token = request.COOKIES[settings.CSRF_COOKIE_NAME]
             csrf_token = _sanitize_token(cookie_token) or _get_new_csrf_token()
             if csrf_token and csrf_token != cookie_token:
-                # Cookie token was acceptable but needed to be fixed;
-                # the cookie needs to be re-set
+                # Cookie token was acceptable but needed to be fixed; the
+                # cookie needs to be reset.
                 request.csrf_cookie_needs_reset = True
-            # Use same nonce next time
+            # Use same nonce next time.
             request.META['CSRF_COOKIE'] = csrf_token
         except KeyError:
             csrf_token = None

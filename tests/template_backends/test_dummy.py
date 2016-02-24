@@ -6,10 +6,8 @@ import re
 
 from django.forms import CharField, Form, Media
 from django.http import HttpRequest
-from django.middleware.csrf import (                    # NOQA isort:skip
-    CsrfViewMiddleware,                                 # NOQA isort:skip
-    _compare_padded_tokens as equivalent_tokens,        # NOQA isort:skip
-    get_token,                                          # NOQA isort:skip
+from django.middleware.csrf import (
+    CsrfViewMiddleware, _compare_padded_tokens as equivalent_tokens, get_token,
 )
 from django.template import TemplateDoesNotExist, TemplateSyntaxError
 from django.template.backends.dummy import TemplateStrings
@@ -88,8 +86,7 @@ class TemplateStringsTests(SimpleTestCase):
         content = template.render(request=request)
 
         expected = '<input type="hidden" name="csrfmiddlewaretoken" value="([^"]+)" />'
-        match = (re.match(expected, content) or
-                 re.match(expected.replace('"', "'"), content))
+        match = re.match(expected, content) or re.match(expected.replace('"', "'"), content)
         self.assertTrue(match, "hidden csrftoken field not found in output")
         self.assertTrue(equivalent_tokens(match.group(1), get_token(request)))
 

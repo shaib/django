@@ -8,10 +8,9 @@ from six import text_type
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
-from django.middleware.csrf import (                    # NOQA isort:skip
-    CSRF_TOKEN_LENGTH, CsrfViewMiddleware,              # NOQA isort:skip
-    _compare_padded_tokens as equivalent_tokens,        # NOQA isort:skip
-    get_token,                                          # NOQA isort:skip
+from django.middleware.csrf import (
+    CSRF_TOKEN_LENGTH, CsrfViewMiddleware,
+    _compare_padded_tokens as equivalent_tokens, get_token,
 )
 from django.template import RequestContext, Template
 from django.template.context_processors import csrf
@@ -102,8 +101,10 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         text = text_type(response.content, response.charset)
         match = re.search("name='csrfmiddlewaretoken' value='(.*?)'", text)
         csrf_token = csrf_id or self._csrf_id
-        self.assertTrue(match and equivalent_tokens(csrf_token, match.group(1)),
-                        "Could not find csrfmiddlewaretoken to match %s" % csrf_token)
+        self.assertTrue(
+            match and equivalent_tokens(csrf_token, match.group(1)),
+            "Could not find csrfmiddlewaretoken to match %s" % csrf_token
+        )
 
     def test_process_view_token_too_long(self):
         """
@@ -120,8 +121,8 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
 
     def test_process_view_token_invalid_chars(self):
         """
-        If the token contains non-alphanumeric characters, it is ignored and a new token is
-        created.
+        If the token contains non-alphanumeric characters, it is ignored and a
+        new token is created.
         """
         token = ('!@#' + self._csrf_id)[:CSRF_TOKEN_LENGTH]
         req = self._get_GET_no_csrf_cookie_request()
@@ -135,8 +136,8 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
 
     def test_process_view_token_invalid_bytes(self):
         """
-        If the token contains improperly encoded unicode, it is ignored and a new token is
-        created.
+        If the token contains improperly encoded unicode, it is ignored and a
+        new token is created.
         """
         token = (b"<1>\xc2\xa1" + force_bytes(self._csrf_id, 'ascii'))[:CSRF_TOKEN_LENGTH]
         req = self._get_GET_no_csrf_cookie_request()
@@ -344,28 +345,24 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
 
     def test_cookie_not_reset_on_accepted_request(self):
         """
-        Verify that the csrf token is changed on every request
-        (although stays equivalent)
+        The csrf token is changed on every request (although stays equivalent).
         """
         req = self._get_POST_request_with_token()
         CsrfViewMiddleware().process_view(req, token_view, (), {})
         resp = token_view(req)
         resp = CsrfViewMiddleware().process_response(req, resp)
-        self.assertNotIn(settings.CSRF_COOKIE_NAME, resp.cookies,
-                         "Cookie was reset on an accepted request")
+        self.assertNotIn(settings.CSRF_COOKIE_NAME, resp.cookies, "Cookie was reset on an accepted request")
 
     def test_bare_nonce_accepted_and_replaced(self):
         """
-        Verify that the csrf token is changed on every request
-        (although stays equivalent)
+        The csrf token is reset from a bare nonce.
         """
         req = self._get_POST_bare_nonce_csrf_cookie_request_with_token()
         req2 = CsrfViewMiddleware().process_view(req, token_view, (), {})
         self.assertIsNone(req2)
         resp = token_view(req)
         resp = CsrfViewMiddleware().process_response(req, resp)
-        self.assertIn(settings.CSRF_COOKIE_NAME, resp.cookies,
-                      "Cookie was not reset from bare nonce")
+        self.assertIn(settings.CSRF_COOKIE_NAME, resp.cookies, "Cookie was not reset from bare nonce")
         csrf_cookie = resp.cookies[settings.CSRF_COOKIE_NAME]
         self.assertEqual(len(csrf_cookie.value), CSRF_TOKEN_LENGTH)
         self._check_token_present(resp, csrf_id=csrf_cookie.value)
