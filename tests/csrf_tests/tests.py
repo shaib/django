@@ -5,7 +5,7 @@ import logging
 import re
 import warnings
 
-from django.conf import settings
+from django.conf import UserSettingsHolder, settings
 from django.http import HttpRequest, HttpResponse
 from django.middleware.csrf import (
     CSRF_TOKEN_LENGTH, REASON_BAD_TOKEN, REASON_NO_CSRF_COOKIE,
@@ -58,6 +58,11 @@ class TestingHttpRequest(HttpRequest):
     A version of HttpRequest that allows us to change some things
     more easily
     """
+    def __init__(self):
+        super(TestingHttpRequest, self).__init__()
+        # We don't need a real session backend for the tests we are doing here
+        self.session = {}
+
     def is_secure(self):
         return getattr(self, '_is_secure_override', False)
 
@@ -152,31 +157,6 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         csrf_cookie = resp2.cookies.get(settings.CSRF_COOKIE_NAME, False)
         self.assertEqual(len(csrf_cookie.value), CSRF_TOKEN_LENGTH)
         self.assertNotEqual(csrf_cookie.value, token)
-
-    def test_process_response_get_token_used(self):
-        """
-        When get_token is used, check that the cookie is created and headers
-        patched.
-        """
-        req = self._get_GET_no_csrf_cookie_request()
-
-        # Put tests for CSRF_COOKIE_* settings here
-        with self.settings(CSRF_COOKIE_NAME='myname',
-                           CSRF_COOKIE_DOMAIN='.example.com',
-                           CSRF_COOKIE_PATH='/test/',
-                           CSRF_COOKIE_SECURE=True,
-                           CSRF_COOKIE_HTTPONLY=True):
-            # token_view calls get_token() indirectly
-            CsrfViewMiddleware().process_view(req, token_view, (), {})
-            resp = token_view(req)
-            resp2 = CsrfViewMiddleware().process_response(req, resp)
-        csrf_cookie = resp2.cookies.get('myname', False)
-        self.assertIsNot(csrf_cookie, False)
-        self.assertEqual(csrf_cookie['domain'], '.example.com')
-        self.assertIs(csrf_cookie['secure'], True)
-        self.assertIs(csrf_cookie['httponly'], True)
-        self.assertEqual(csrf_cookie['path'], '/test/')
-        self.assertIn('Cookie', resp2.get('Vary', ''))
 
     def test_process_response_get_token_not_used(self):
         """
@@ -471,6 +451,9 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         """
         A POST HTTPS request is accepted when USE_X_FORWARDED_PORT=True.
         """
+        self._test_https_good_referer_behind_proxy()
+
+    def _test_https_good_referer_behind_proxy(self):
         req = self._get_POST_request_with_token()
         req._is_secure_override = True
         req.META.update({
@@ -515,6 +498,9 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         A POST HTTPS request with a good referer should be accepted from a
         subdomain that's allowed by CSRF_COOKIE_DOMAIN.
         """
+        self._test_https_good_referer_matches_cookie_domain()
+
+    def _test_https_good_referer_matches_cookie_domain(self):
         req = self._get_POST_request_with_token()
         req._is_secure_override = True
         req.META['HTTP_REFERER'] = 'https://foo.example.com/'
@@ -528,6 +514,9 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         A POST HTTPS request with a good referer should be accepted from a
         subdomain that's allowed by CSRF_COOKIE_DOMAIN and a non-443 port.
         """
+        self._test_https_good_referer_matches_cookie_domain_with_different_port()
+
+    def _test_https_good_referer_matches_cookie_domain_with_different_port(self):
         req = self._get_POST_request_with_token()
         req._is_secure_override = True
         req.META['HTTP_HOST'] = 'www.example.com'
@@ -667,6 +656,12 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
 
                 self.raise_error = False
                 self.COOKIES[settings.CSRF_COOKIE_NAME] = token
+
+                # We handle both cases here to prevent a lot of duplicate code
+                # in the session tests
+                self.session = {}
+                self.session[settings.CSRF_SESSION_KEY] = token
+
                 self.POST['csrfmiddlewaretoken'] = token
                 self.raise_error = raise_error
 
@@ -694,3 +689,139 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
             resp = CsrfViewMiddleware().process_view(req, post_form_view, (), {})
             self.assertEqual(resp.status_code, 403)
             self.assertEqual(logger_calls[0], 'Forbidden (%s): ' % REASON_BAD_TOKEN)
+
+
+class CsrfViewMiddlewareUseSessionsTest(CsrfViewMiddlewareTest):
+    """
+    This is a subclass of CsrfViewMiddlewareTest that changes its behaviour to work with
+    CSRF_USE_SESSIONS = True to test the session-based CSRF handling in the same way as the
+    cookie-based handling.
+    """
+
+    def _get_POST_bare_secret_csrf_cookie_request(self):
+        req = self._get_POST_no_csrf_cookie_request()
+        req.session[settings.CSRF_COOKIE_NAME] = self._csrf_id_cookie[:32]
+        return req
+
+    def _get_GET_csrf_cookie_request(self):
+        req = TestingHttpRequest()
+        req.session[settings.CSRF_COOKIE_NAME] = self._csrf_id_cookie
+        return req
+
+    def setUp(self):
+        super(CsrfViewMiddlewareTest, self).setUp()
+
+        override = UserSettingsHolder(settings._wrapped)
+        override.CSRF_USE_SESSIONS = True
+        override.CSRF_COOKIE_DOMAIN = None
+        self.wrapped = settings._wrapped
+        settings._wrapped = override
+
+    def tearDown(self):
+        settings._wrapped = self.wrapped
+        del self.wrapped
+        super(CsrfViewMiddlewareTest, self).tearDown()
+
+    def test_process_response_get_token_used(self):
+        """
+        The ensure_csrf_cookie() decorator works without middleware.
+        """
+        @ensure_csrf_cookie
+        def view(request):
+            # Doesn't insert a token or anything
+            return HttpResponse(content="")
+
+        req = self._get_GET_no_csrf_cookie_request()
+        view(req)
+        self.assertTrue(req.session.get(settings.CSRF_SESSION_KEY, False))
+
+    def test_ensures_csrf_cookie_with_middleware(self):
+        """
+        The ensure_csrf_cookie() decorator works with the CsrfViewMiddleware
+        enabled.
+        """
+        @ensure_csrf_cookie
+        def view(request):
+            # Doesn't insert a token or anything
+            return HttpResponse(content="")
+
+        req = self._get_GET_no_csrf_cookie_request()
+        CsrfViewMiddleware().process_view(req, view, (), {})
+        resp = view(req)
+        CsrfViewMiddleware().process_response(req, resp)
+        self.assertTrue(req.session.get(settings.CSRF_SESSION_KEY, False))
+
+    def test_ensures_csrf_cookie_no_middleware(self):
+        pass  # Does not apply to sessions
+
+    def test_process_view_token_invalid_bytes(self):
+        pass  # Does not apply to sessions
+
+    def test_process_view_token_invalid_chars(self):
+        pass  # Does not apply to sessions
+
+    def test_process_view_token_too_long(self):
+        pass  # Does not apply to sessions
+
+    def test_bare_secret_accepted_and_replaced(self):
+        # Does not apply to sessions, as CSRF tokens in sessions are added in 1.11 and bare secrets
+        # vanished in 1.10, so we cannot have bare secrets in a session
+        pass
+
+    def test_csrf_cookie_age(self):
+        pass  # Does not apply to sessions
+
+    def test_csrf_cookie_age_none(self):
+        pass  # Does not apply to sessions
+
+    def test_token_node_with_new_csrf_cookie(self):
+        """
+        Check that CsrfTokenNode works when a CSRF cookie is created by
+        the middleware (when one was not already present)
+        """
+        req = self._get_GET_no_csrf_cookie_request()
+        CsrfViewMiddleware().process_view(req, token_view, (), {})
+        resp = token_view(req)
+        CsrfViewMiddleware().process_response(req, resp)
+        csrf_cookie = req.session[settings.CSRF_SESSION_KEY]
+        self._check_token_present(resp, csrf_id=csrf_cookie)
+
+    @override_settings(ALLOWED_HOSTS=['www.example.com'], SESSION_COOKIE_DOMAIN='.example.com',
+                       USE_X_FORWARDED_PORT=True, DEBUG=True)
+    def test_https_good_referer_behind_proxy(self):
+        """
+        A POST HTTPS request is accepted when USE_X_FORWARDED_PORT=True.
+        """
+        self._test_https_good_referer_behind_proxy()
+
+    @override_settings(ALLOWED_HOSTS=['www.example.com'], SESSION_COOKIE_DOMAIN='.example.com')
+    def test_https_good_referer_matches_cookie_domain(self):
+        """
+        A POST HTTPS request with a good referer should be accepted from a
+        subdomain that's allowed by CSRF_COOKIE_DOMAIN.
+        """
+        self._test_https_good_referer_matches_cookie_domain()
+
+    @override_settings(ALLOWED_HOSTS=['www.example.com'], SESSION_COOKIE_DOMAIN='.example.com')
+    def test_https_good_referer_matches_cookie_domain_with_different_port(self):
+        """
+        A POST HTTPS request with a good referer should be accepted from a
+        subdomain that's allowed by CSRF_COOKIE_DOMAIN and a non-443 port.
+        """
+        self._test_https_good_referer_matches_cookie_domain_with_different_port()
+
+    @override_settings(CSRF_COOKIE_DOMAIN='.example.com', DEBUG=True)
+    def test_https_reject_insecure_referer(self):
+        """
+        A POST HTTPS request from an insecure referer should be rejected.
+        """
+        req = self._get_POST_request_with_token()
+        req._is_secure_override = True
+        req.META['HTTP_REFERER'] = 'http://example.com/'
+        req.META['SERVER_PORT'] = '443'
+        response = CsrfViewMiddleware().process_view(req, post_form_view, (), {})
+        self.assertContains(
+            response,
+            'Referer checking failed - Referer is insecure while host is secure.',
+            status_code=403,
+        )

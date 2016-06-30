@@ -220,6 +220,10 @@ Cache
 CSRF
 ~~~~
 
+* Two new settings :setting:`CSRF_USE_SESSIONS` and
+  :setting:`CSRF_SESSION_KEY` have been added to allow storing the CSRF token
+  inside the user's session instead of a cookie.
+
 * ...
 
 Database backends

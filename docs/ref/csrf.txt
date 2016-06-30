@@ -113,6 +113,21 @@ The above code could be simplified by using the `JavaScript Cookie library
     the DOM. Regardless, you're guaranteed to have the cookie if the token is
     present in the DOM, so you should use the cookie!
 
+.. note::
+
+    If you activate :setting:`CSRF_USE_SESSIONS`, this method does not work and
+    need to make sure you always include the CSRF token somewhere in your HTML
+    read the token from the DOM with JavaScript:
+
+    .. code-block:: html+django
+
+        {% csrf_token %}
+        <script type="text/javascript">
+        // using jQuery
+        var csrftoken = jQuery("[name=csrfmiddlewaretoken]").val();
+        </script>
+
+
 .. warning::
 
     If your view is not rendering a template containing the :ttag:`csrf_token`
