@@ -4,8 +4,9 @@ import warnings
 from itertools import takewhile
 
 from django.apps import apps
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connections
+from django.db import DEFAULT_DB_ALIAS, connections, router
 from django.db.migrations import Migration
 from django.db.migrations.autodetector import MigrationAutodetector
 from django.db.migrations.loader import MigrationLoader
@@ -94,9 +95,18 @@ class Command(BaseCommand):
         loader = MigrationLoader(None, ignore_no_migrations=True)
 
         # Raise an error if any migrations are applied before their dependencies.
-        for db in connections:
+        consistency_check_labels = set(config.label for config in apps.get_app_configs())
+        for db in sorted(connections):
             connection = connections[db]
-            if connection.settings_dict['ENGINE'] != 'django.db.backends.dummy':
+            is_default = (db == DEFAULT_DB_ALIAS)
+            # Non-default databases are only checked if database routers used.
+            is_non_default_checkable = (db != DEFAULT_DB_ALIAS and settings.DATABASE_ROUTERS)
+            is_checkable = (
+                (is_default or is_non_default_checkable) and
+                # At least one app must be migrated to the database.
+                any(router.allow_migrate(connection.alias, label) for label in consistency_check_labels)
+            )
+            if connection.settings_dict['ENGINE'] != 'django.db.backends.dummy' and is_checkable:
                 loader.check_consistent_history(connection)
 
         # Before anything else, see if there's conflicting apps and drop out
