@@ -67,16 +67,19 @@ class TestingHttpRequest(HttpRequest):
         return getattr(self, '_is_secure_override', False)
 
 
-class CsrfViewMiddlewareTest(SimpleTestCase):
+class CsrfViewMiddlewareTestBase(object):
+    """
+    A mixin class for the parts of the CsrfViewMiddlewareTest which are
+    common to both CSRF-cookie based tokens and session-based tokens
+    """
+
     _csrf_id = _csrf_id_cookie = '1bcdefghij2bcdefghij3bcdefghij4bcdefghij5bcdefghij6bcdefghijABCD'
 
     def _get_GET_no_csrf_cookie_request(self):
         return TestingHttpRequest()
 
     def _get_GET_csrf_cookie_request(self):
-        req = TestingHttpRequest()
-        req.COOKIES[settings.CSRF_COOKIE_NAME] = self._csrf_id_cookie
-        return req
+        raise NotImplementedError("Stub for subclasses to implement")
 
     def _get_POST_csrf_cookie_request(self):
         req = self._get_GET_csrf_cookie_request()
@@ -93,16 +96,6 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         req.POST['csrfmiddlewaretoken'] = self._csrf_id
         return req
 
-    def _get_POST_bare_secret_csrf_cookie_request(self):
-        req = self._get_POST_no_csrf_cookie_request()
-        req.COOKIES[settings.CSRF_COOKIE_NAME] = self._csrf_id_cookie[:32]
-        return req
-
-    def _get_POST_bare_secret_csrf_cookie_request_with_token(self):
-        req = self._get_POST_bare_secret_csrf_cookie_request()
-        req.POST['csrfmiddlewaretoken'] = self._csrf_id_cookie[:32]
-        return req
-
     def _check_token_present(self, response, csrf_id=None):
         text = text_type(response.content, response.charset)
         match = re.search("name='csrfmiddlewaretoken' value='(.*?)'", text)
@@ -111,52 +104,6 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
             match and equivalent_tokens(csrf_token, match.group(1)),
             "Could not find csrfmiddlewaretoken to match %s" % csrf_token
         )
-
-    def test_process_view_token_too_long(self):
-        """
-        If the token is longer than expected, it is ignored and a new token is
-        created.
-        """
-        req = self._get_GET_no_csrf_cookie_request()
-        req.COOKIES[settings.CSRF_COOKIE_NAME] = 'x' * 100000
-        CsrfViewMiddleware().process_view(req, token_view, (), {})
-        resp = token_view(req)
-        resp2 = CsrfViewMiddleware().process_response(req, resp)
-        csrf_cookie = resp2.cookies.get(settings.CSRF_COOKIE_NAME, False)
-        self.assertEqual(len(csrf_cookie.value), CSRF_TOKEN_LENGTH)
-
-    def test_process_view_token_invalid_chars(self):
-        """
-        If the token contains non-alphanumeric characters, it is ignored and a
-        new token is created.
-        """
-        token = ('!@#' + self._csrf_id)[:CSRF_TOKEN_LENGTH]
-        req = self._get_GET_no_csrf_cookie_request()
-        req.COOKIES[settings.CSRF_COOKIE_NAME] = token
-        CsrfViewMiddleware().process_view(req, token_view, (), {})
-        resp = token_view(req)
-        resp2 = CsrfViewMiddleware().process_response(req, resp)
-        csrf_cookie = resp2.cookies.get(settings.CSRF_COOKIE_NAME, False)
-        self.assertEqual(len(csrf_cookie.value), CSRF_TOKEN_LENGTH)
-        self.assertNotEqual(csrf_cookie.value, token)
-
-    def test_process_view_token_invalid_bytes(self):
-        """
-        If the token contains improperly encoded unicode, it is ignored and a
-        new token is created.
-        """
-        token = (b"<1>\xc2\xa1" + force_bytes(self._csrf_id, 'ascii'))[:CSRF_TOKEN_LENGTH]
-        req = self._get_GET_no_csrf_cookie_request()
-        req.COOKIES[settings.CSRF_COOKIE_NAME] = token
-        # We expect a UnicodeWarning here, because we used broken utf-8 on purpose
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UnicodeWarning)
-            CsrfViewMiddleware().process_view(req, token_view, (), {})
-        resp = token_view(req)
-        resp2 = CsrfViewMiddleware().process_response(req, resp)
-        csrf_cookie = resp2.cookies.get(settings.CSRF_COOKIE_NAME, False)
-        self.assertEqual(len(csrf_cookie.value), CSRF_TOKEN_LENGTH)
-        self.assertNotEqual(csrf_cookie.value, token)
 
     def test_process_response_get_token_not_used(self):
         """
@@ -352,20 +299,6 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
                 "CSRF cookie was changed on an accepted request"
             )
 
-    def test_bare_secret_accepted_and_replaced(self):
-        """
-        The csrf token is reset from a bare secret.
-        """
-        req = self._get_POST_bare_secret_csrf_cookie_request_with_token()
-        req2 = CsrfViewMiddleware().process_view(req, token_view, (), {})
-        self.assertIsNone(req2)
-        resp = token_view(req)
-        resp = CsrfViewMiddleware().process_response(req, resp)
-        self.assertIn(settings.CSRF_COOKIE_NAME, resp.cookies, "Cookie was not reset from bare secret")
-        csrf_cookie = resp.cookies[settings.CSRF_COOKIE_NAME]
-        self.assertEqual(len(csrf_cookie.value), CSRF_TOKEN_LENGTH)
-        self._check_token_present(resp, csrf_id=csrf_cookie.value)
-
     @override_settings(DEBUG=True, ALLOWED_HOSTS=['www.example.com'])
     def test_https_bad_referer(self):
         """
@@ -446,13 +379,6 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         req2 = CsrfViewMiddleware().process_view(req, post_form_view, (), {})
         self.assertIsNone(req2)
 
-    @override_settings(ALLOWED_HOSTS=['www.example.com'], CSRF_COOKIE_DOMAIN='.example.com', USE_X_FORWARDED_PORT=True)
-    def test_https_good_referer_behind_proxy(self):
-        """
-        A POST HTTPS request is accepted when USE_X_FORWARDED_PORT=True.
-        """
-        self._test_https_good_referer_behind_proxy()
-
     def _test_https_good_referer_behind_proxy(self):
         req = self._get_POST_request_with_token()
         req._is_secure_override = True
@@ -492,14 +418,6 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         response = CsrfViewMiddleware().process_view(req, post_form_view, (), {})
         self.assertIsNone(response)
 
-    @override_settings(ALLOWED_HOSTS=['www.example.com'], CSRF_COOKIE_DOMAIN='.example.com')
-    def test_https_good_referer_matches_cookie_domain(self):
-        """
-        A POST HTTPS request with a good referer should be accepted from a
-        subdomain that's allowed by CSRF_COOKIE_DOMAIN.
-        """
-        self._test_https_good_referer_matches_cookie_domain()
-
     def _test_https_good_referer_matches_cookie_domain(self):
         req = self._get_POST_request_with_token()
         req._is_secure_override = True
@@ -507,14 +425,6 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         req.META['SERVER_PORT'] = '443'
         response = CsrfViewMiddleware().process_view(req, post_form_view, (), {})
         self.assertIsNone(response)
-
-    @override_settings(ALLOWED_HOSTS=['www.example.com'], CSRF_COOKIE_DOMAIN='.example.com')
-    def test_https_good_referer_matches_cookie_domain_with_different_port(self):
-        """
-        A POST HTTPS request with a good referer should be accepted from a
-        subdomain that's allowed by CSRF_COOKIE_DOMAIN and a non-443 port.
-        """
-        self._test_https_good_referer_matches_cookie_domain_with_different_port()
 
     def _test_https_good_referer_matches_cookie_domain_with_different_port(self):
         req = self._get_POST_request_with_token()
@@ -524,53 +434,6 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         req.META['SERVER_PORT'] = '4443'
         response = CsrfViewMiddleware().process_view(req, post_form_view, (), {})
         self.assertIsNone(response)
-
-    @override_settings(CSRF_COOKIE_DOMAIN='.example.com', DEBUG=True)
-    def test_https_reject_insecure_referer(self):
-        """
-        A POST HTTPS request from an insecure referer should be rejected.
-        """
-        req = self._get_POST_request_with_token()
-        req._is_secure_override = True
-        req.META['HTTP_REFERER'] = 'http://example.com/'
-        req.META['SERVER_PORT'] = '443'
-        response = CsrfViewMiddleware().process_view(req, post_form_view, (), {})
-        self.assertContains(
-            response,
-            'Referer checking failed - Referer is insecure while host is secure.',
-            status_code=403,
-        )
-
-    def test_ensures_csrf_cookie_no_middleware(self):
-        """
-        The ensure_csrf_cookie() decorator works without middleware.
-        """
-        @ensure_csrf_cookie
-        def view(request):
-            # Doesn't insert a token or anything
-            return HttpResponse(content="")
-
-        req = self._get_GET_no_csrf_cookie_request()
-        resp = view(req)
-        self.assertTrue(resp.cookies.get(settings.CSRF_COOKIE_NAME, False))
-        self.assertIn('Cookie', resp.get('Vary', ''))
-
-    def test_ensures_csrf_cookie_with_middleware(self):
-        """
-        The ensure_csrf_cookie() decorator works with the CsrfViewMiddleware
-        enabled.
-        """
-        @ensure_csrf_cookie
-        def view(request):
-            # Doesn't insert a token or anything
-            return HttpResponse(content="")
-
-        req = self._get_GET_no_csrf_cookie_request()
-        CsrfViewMiddleware().process_view(req, view, (), {})
-        resp = view(req)
-        resp2 = CsrfViewMiddleware().process_response(req, resp)
-        self.assertTrue(resp2.cookies.get(settings.CSRF_COOKIE_NAME, False))
-        self.assertIn('Cookie', resp2.get('Vary', ''))
 
     def test_ensures_csrf_cookie_no_logging(self):
         """
@@ -597,49 +460,6 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
         finally:
             logger.removeHandler(test_handler)
             logger.setLevel(old_log_level)
-
-    def test_csrf_cookie_age(self):
-        """
-        CSRF cookie age can be set using settings.CSRF_COOKIE_AGE.
-        """
-        req = self._get_GET_no_csrf_cookie_request()
-
-        MAX_AGE = 123
-        with self.settings(CSRF_COOKIE_NAME='csrfcookie',
-                           CSRF_COOKIE_DOMAIN='.example.com',
-                           CSRF_COOKIE_AGE=MAX_AGE,
-                           CSRF_COOKIE_PATH='/test/',
-                           CSRF_COOKIE_SECURE=True,
-                           CSRF_COOKIE_HTTPONLY=True):
-            # token_view calls get_token() indirectly
-            CsrfViewMiddleware().process_view(req, token_view, (), {})
-            resp = token_view(req)
-
-            resp2 = CsrfViewMiddleware().process_response(req, resp)
-            max_age = resp2.cookies.get('csrfcookie').get('max-age')
-            self.assertEqual(max_age, MAX_AGE)
-
-    def test_csrf_cookie_age_none(self):
-        """
-        CSRF cookie age does not have max age set and therefore uses
-        session-based cookies.
-        """
-        req = self._get_GET_no_csrf_cookie_request()
-
-        MAX_AGE = None
-        with self.settings(CSRF_COOKIE_NAME='csrfcookie',
-                           CSRF_COOKIE_DOMAIN='.example.com',
-                           CSRF_COOKIE_AGE=MAX_AGE,
-                           CSRF_COOKIE_PATH='/test/',
-                           CSRF_COOKIE_SECURE=True,
-                           CSRF_COOKIE_HTTPONLY=True):
-            # token_view calls get_token() indirectly
-            CsrfViewMiddleware().process_view(req, token_view, (), {})
-            resp = token_view(req)
-
-            resp2 = CsrfViewMiddleware().process_response(req, resp)
-            max_age = resp2.cookies.get('csrfcookie').get('max-age')
-            self.assertEqual(max_age, '')
 
     def test_post_data_read_failure(self):
         """
@@ -691,7 +511,198 @@ class CsrfViewMiddlewareTest(SimpleTestCase):
             self.assertEqual(logger_calls[0], 'Forbidden (%s): ' % REASON_BAD_TOKEN)
 
 
-class CsrfViewMiddlewareUseSessionsTest(CsrfViewMiddlewareTest):
+class CsrfViewMiddlewareTest(CsrfViewMiddlewareTestBase, SimpleTestCase):
+    
+    def _get_GET_csrf_cookie_request(self):
+        req = TestingHttpRequest()
+        req.COOKIES[settings.CSRF_COOKIE_NAME] = self._csrf_id_cookie
+        return req
+
+    def _get_POST_bare_secret_csrf_cookie_request(self):
+        req = self._get_POST_no_csrf_cookie_request()
+        req.COOKIES[settings.CSRF_COOKIE_NAME] = self._csrf_id_cookie[:32]
+        return req
+
+    def _get_POST_bare_secret_csrf_cookie_request_with_token(self):
+        req = self._get_POST_bare_secret_csrf_cookie_request()
+        req.POST['csrfmiddlewaretoken'] = self._csrf_id_cookie[:32]
+        return req
+
+    def test_ensures_csrf_cookie_no_middleware(self):
+        """
+        The ensure_csrf_cookie() decorator works without middleware.
+        """
+        @ensure_csrf_cookie
+        def view(request):
+            # Doesn't insert a token or anything
+            return HttpResponse(content="")
+
+        req = self._get_GET_no_csrf_cookie_request()
+        resp = view(req)
+        self.assertTrue(resp.cookies.get(settings.CSRF_COOKIE_NAME, False))
+        self.assertIn('Cookie', resp.get('Vary', ''))
+
+    def test_ensures_csrf_cookie_with_middleware(self):
+        """
+        The ensure_csrf_cookie() decorator works with the CsrfViewMiddleware
+        enabled.
+        """
+        @ensure_csrf_cookie
+        def view(request):
+            # Doesn't insert a token or anything
+            return HttpResponse(content="")
+
+        req = self._get_GET_no_csrf_cookie_request()
+        CsrfViewMiddleware().process_view(req, view, (), {})
+        resp = view(req)
+        resp2 = CsrfViewMiddleware().process_response(req, resp)
+        self.assertTrue(resp2.cookies.get(settings.CSRF_COOKIE_NAME, False))
+        self.assertIn('Cookie', resp2.get('Vary', ''))
+
+    def test_csrf_cookie_age(self):
+        """
+        CSRF cookie age can be set using settings.CSRF_COOKIE_AGE.
+        """
+        req = self._get_GET_no_csrf_cookie_request()
+
+        MAX_AGE = 123
+        with self.settings(CSRF_COOKIE_NAME='csrfcookie',
+                           CSRF_COOKIE_DOMAIN='.example.com',
+                           CSRF_COOKIE_AGE=MAX_AGE,
+                           CSRF_COOKIE_PATH='/test/',
+                           CSRF_COOKIE_SECURE=True,
+                           CSRF_COOKIE_HTTPONLY=True):
+            # token_view calls get_token() indirectly
+            CsrfViewMiddleware().process_view(req, token_view, (), {})
+            resp = token_view(req)
+
+            resp2 = CsrfViewMiddleware().process_response(req, resp)
+            max_age = resp2.cookies.get('csrfcookie').get('max-age')
+            self.assertEqual(max_age, MAX_AGE)
+
+    def test_csrf_cookie_age_none(self):
+        """
+        CSRF cookie age does not have max age set and therefore uses
+        session-based cookies.
+        """
+        req = self._get_GET_no_csrf_cookie_request()
+
+        MAX_AGE = None
+        with self.settings(CSRF_COOKIE_NAME='csrfcookie',
+                           CSRF_COOKIE_DOMAIN='.example.com',
+                           CSRF_COOKIE_AGE=MAX_AGE,
+                           CSRF_COOKIE_PATH='/test/',
+                           CSRF_COOKIE_SECURE=True,
+                           CSRF_COOKIE_HTTPONLY=True):
+            # token_view calls get_token() indirectly
+            CsrfViewMiddleware().process_view(req, token_view, (), {})
+            resp = token_view(req)
+
+            resp2 = CsrfViewMiddleware().process_response(req, resp)
+            max_age = resp2.cookies.get('csrfcookie').get('max-age')
+            self.assertEqual(max_age, '')
+
+    def test_process_view_token_too_long(self):
+        """
+        If the token is longer than expected, it is ignored and a new token is
+        created.
+        """
+        req = self._get_GET_no_csrf_cookie_request()
+        req.COOKIES[settings.CSRF_COOKIE_NAME] = 'x' * 100000
+        CsrfViewMiddleware().process_view(req, token_view, (), {})
+        resp = token_view(req)
+        resp2 = CsrfViewMiddleware().process_response(req, resp)
+        csrf_cookie = resp2.cookies.get(settings.CSRF_COOKIE_NAME, False)
+        self.assertEqual(len(csrf_cookie.value), CSRF_TOKEN_LENGTH)
+
+    def test_process_view_token_invalid_bytes(self):
+        """
+        If the token contains improperly encoded unicode, it is ignored and a
+        new token is created.
+        """
+        token = (b"<1>\xc2\xa1" + force_bytes(self._csrf_id, 'ascii'))[:CSRF_TOKEN_LENGTH]
+        req = self._get_GET_no_csrf_cookie_request()
+        req.COOKIES[settings.CSRF_COOKIE_NAME] = token
+        # We expect a UnicodeWarning here, because we used broken utf-8 on purpose
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UnicodeWarning)
+            CsrfViewMiddleware().process_view(req, token_view, (), {})
+        resp = token_view(req)
+        resp2 = CsrfViewMiddleware().process_response(req, resp)
+        csrf_cookie = resp2.cookies.get(settings.CSRF_COOKIE_NAME, False)
+        self.assertEqual(len(csrf_cookie.value), CSRF_TOKEN_LENGTH)
+        self.assertNotEqual(csrf_cookie.value, token)
+
+    def test_process_view_token_invalid_chars(self):
+        """
+        If the token contains non-alphanumeric characters, it is ignored and a
+        new token is created.
+        """
+        token = ('!@#' + self._csrf_id)[:CSRF_TOKEN_LENGTH]
+        req = self._get_GET_no_csrf_cookie_request()
+        req.COOKIES[settings.CSRF_COOKIE_NAME] = token
+        CsrfViewMiddleware().process_view(req, token_view, (), {})
+        resp = token_view(req)
+        resp2 = CsrfViewMiddleware().process_response(req, resp)
+        csrf_cookie = resp2.cookies.get(settings.CSRF_COOKIE_NAME, False)
+        self.assertEqual(len(csrf_cookie.value), CSRF_TOKEN_LENGTH)
+        self.assertNotEqual(csrf_cookie.value, token)
+
+    def test_bare_secret_accepted_and_replaced(self):
+        """
+        The csrf token is reset from a bare secret.
+        """
+        req = self._get_POST_bare_secret_csrf_cookie_request_with_token()
+        req2 = CsrfViewMiddleware().process_view(req, token_view, (), {})
+        self.assertIsNone(req2)
+        resp = token_view(req)
+        resp = CsrfViewMiddleware().process_response(req, resp)
+        self.assertIn(settings.CSRF_COOKIE_NAME, resp.cookies, "Cookie was not reset from bare secret")
+        csrf_cookie = resp.cookies[settings.CSRF_COOKIE_NAME]
+        self.assertEqual(len(csrf_cookie.value), CSRF_TOKEN_LENGTH)
+        self._check_token_present(resp, csrf_id=csrf_cookie.value)
+
+    @override_settings(ALLOWED_HOSTS=['www.example.com'], CSRF_COOKIE_DOMAIN='.example.com', USE_X_FORWARDED_PORT=True)
+    def test_https_good_referer_behind_proxy(self):
+        """
+        A POST HTTPS request is accepted when USE_X_FORWARDED_PORT=True.
+        """
+        self._test_https_good_referer_behind_proxy()
+
+    @override_settings(ALLOWED_HOSTS=['www.example.com'], CSRF_COOKIE_DOMAIN='.example.com')
+    def test_https_good_referer_matches_cookie_domain(self):
+        """
+        A POST HTTPS request with a good referer should be accepted from a
+        subdomain that's allowed by CSRF_COOKIE_DOMAIN.
+        """
+        self._test_https_good_referer_matches_cookie_domain()
+
+    @override_settings(ALLOWED_HOSTS=['www.example.com'], CSRF_COOKIE_DOMAIN='.example.com')
+    def test_https_good_referer_matches_cookie_domain_with_different_port(self):
+        """
+        A POST HTTPS request with a good referer should be accepted from a
+        subdomain that's allowed by CSRF_COOKIE_DOMAIN and a non-443 port.
+        """
+        self._test_https_good_referer_matches_cookie_domain_with_different_port()
+
+    @override_settings(CSRF_COOKIE_DOMAIN='.example.com', DEBUG=True)
+    def test_https_reject_insecure_referer(self):
+        """
+        A POST HTTPS request from an insecure referer should be rejected.
+        """
+        req = self._get_POST_request_with_token()
+        req._is_secure_override = True
+        req.META['HTTP_REFERER'] = 'http://example.com/'
+        req.META['SERVER_PORT'] = '443'
+        response = CsrfViewMiddleware().process_view(req, post_form_view, (), {})
+        self.assertContains(
+            response,
+            'Referer checking failed - Referer is insecure while host is secure.',
+            status_code=403,
+        )
+
+
+class CsrfViewMiddlewareUseSessionsTest(CsrfViewMiddlewareTestBase, SimpleTestCase):
     """
     This is a subclass of CsrfViewMiddlewareTest that changes its behaviour to work with
     CSRF_USE_SESSIONS = True to test the session-based CSRF handling in the same way as the
@@ -709,7 +720,7 @@ class CsrfViewMiddlewareUseSessionsTest(CsrfViewMiddlewareTest):
         return req
 
     def setUp(self):
-        super(CsrfViewMiddlewareTest, self).setUp()
+        super(CsrfViewMiddlewareUseSessionsTest, self).setUp()
 
         override = UserSettingsHolder(settings._wrapped)
         override.CSRF_USE_SESSIONS = True
@@ -720,7 +731,7 @@ class CsrfViewMiddlewareUseSessionsTest(CsrfViewMiddlewareTest):
     def tearDown(self):
         settings._wrapped = self.wrapped
         del self.wrapped
-        super(CsrfViewMiddlewareTest, self).tearDown()
+        super(CsrfViewMiddlewareUseSessionsTest, self).tearDown()
 
     def test_process_response_get_token_used(self):
         """
@@ -751,29 +762,6 @@ class CsrfViewMiddlewareUseSessionsTest(CsrfViewMiddlewareTest):
         CsrfViewMiddleware().process_response(req, resp)
         self.assertTrue(req.session.get(settings.CSRF_SESSION_KEY, False))
 
-    def test_ensures_csrf_cookie_no_middleware(self):
-        pass  # Does not apply to sessions
-
-    def test_process_view_token_invalid_bytes(self):
-        pass  # Does not apply to sessions
-
-    def test_process_view_token_invalid_chars(self):
-        pass  # Does not apply to sessions
-
-    def test_process_view_token_too_long(self):
-        pass  # Does not apply to sessions
-
-    def test_bare_secret_accepted_and_replaced(self):
-        # Does not apply to sessions, as CSRF tokens in sessions are added in 1.11 and bare secrets
-        # vanished in 1.10, so we cannot have bare secrets in a session
-        pass
-
-    def test_csrf_cookie_age(self):
-        pass  # Does not apply to sessions
-
-    def test_csrf_cookie_age_none(self):
-        pass  # Does not apply to sessions
-
     def test_token_node_with_new_csrf_cookie(self):
         """
         Check that CsrfTokenNode works when a CSRF cookie is created by
@@ -798,7 +786,7 @@ class CsrfViewMiddlewareUseSessionsTest(CsrfViewMiddlewareTest):
     def test_https_good_referer_matches_cookie_domain(self):
         """
         A POST HTTPS request with a good referer should be accepted from a
-        subdomain that's allowed by CSRF_COOKIE_DOMAIN.
+        subdomain that's allowed by SESSION_COOKIE_DOMAIN.
         """
         self._test_https_good_referer_matches_cookie_domain()
 
@@ -806,11 +794,11 @@ class CsrfViewMiddlewareUseSessionsTest(CsrfViewMiddlewareTest):
     def test_https_good_referer_matches_cookie_domain_with_different_port(self):
         """
         A POST HTTPS request with a good referer should be accepted from a
-        subdomain that's allowed by CSRF_COOKIE_DOMAIN and a non-443 port.
+        subdomain that's allowed by SESSION_COOKIE_DOMAIN and a non-443 port.
         """
         self._test_https_good_referer_matches_cookie_domain_with_different_port()
 
-    @override_settings(CSRF_COOKIE_DOMAIN='.example.com', DEBUG=True)
+    @override_settings(SESSION_COOKIE_DOMAIN='.example.com', DEBUG=True)
     def test_https_reject_insecure_referer(self):
         """
         A POST HTTPS request from an insecure referer should be rejected.
