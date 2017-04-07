@@ -2,7 +2,7 @@ import copy
 import time
 import warnings
 from collections import deque
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 
 import _thread
 import pytz
@@ -97,6 +97,10 @@ class BaseDatabaseWrapper:
         self.introspection = self.introspection_class(self)
         self.ops = self.ops_class(self)
         self.validation = self.validation_class(self)
+        # A stack of context-managers to be invoked around execute()/executemany() calls
+        # Each entry is a pair: a context manager, and False/True/None indicating use
+        # on execute-only/executemany-only/both.
+        self.execute_hooks = []
 
     def ensure_timezone(self):
         """
@@ -640,3 +644,22 @@ class BaseDatabaseWrapper:
         if allow_thread_sharing is None:
             allow_thread_sharing = self.allow_thread_sharing
         return type(self)(settings_dict, alias, allow_thread_sharing)
+
+    def _push_execute_hook(self, hook, for_many=None):
+        self.execute_hooks.push((hook, for_many))
+
+    def _pop_execute_hook(self):
+        return self.execute_hooks.pop()
+
+    @contextmanager()
+    def add_execution_hook(self, hook, for_many=None):
+        self._push_execute_hook(hook, for_many)
+        yield
+        self._pop_execute_hook()
+
+    def get_execute_hooks(self, many):
+        return ExitStack(
+            hook() if callable(hook) else hook
+            for (hook, for_many) in self.execute_hooks
+            if (for_many is None or for_many==many)
+        )

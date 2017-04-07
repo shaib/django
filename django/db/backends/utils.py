@@ -55,16 +55,18 @@ class CursorWrapper:
 
     def execute(self, sql, params=None):
         self.db.validate_no_broken_transaction()
-        with self.db.wrap_database_errors:
-            if params is None:
-                return self.cursor.execute(sql)
-            else:
-                return self.cursor.execute(sql, params)
+        with self.db.get_execute_hooks(many=False):
+            with self.db.wrap_database_errors:
+                if params is None:
+                    return self.cursor.execute(sql)
+                else:
+                    return self.cursor.execute(sql, params)
 
     def executemany(self, sql, param_list):
         self.db.validate_no_broken_transaction()
-        with self.db.wrap_database_errors:
-            return self.cursor.executemany(sql, param_list)
+        with self.db.get_execute_hooks(many=True):
+            with self.db.wrap_database_errors:
+                return self.cursor.executemany(sql, param_list)
 
 
 class CursorDebugWrapper(CursorWrapper):
