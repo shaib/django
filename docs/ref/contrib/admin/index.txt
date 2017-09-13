@@ -2704,14 +2704,14 @@ Hooking ``AdminSite`` instances into your URLconf
 The last step in setting up the Django admin is to hook your ``AdminSite``
 instance into your URLconf. Do this by pointing a given URL at the
 ``AdminSite.urls`` method. It is not necessary to use
-:func:`~django.conf.urls.include()`.
+:func:`~django.urls.include()`.
 
 In this example, we register the default ``AdminSite`` instance
 ``django.contrib.admin.site`` at the URL ``/admin/`` ::
 
     # urls.py
-    from django.conf.urls import url
     from django.contrib import admin
+    from django.urls import path
 
     urlpatterns = [
         path('admin/', admin.site.urls),
@@ -2746,7 +2746,7 @@ update :file:`myproject/urls.py` to reference your :class:`AdminSite` subclass.
 .. snippet::
     :filename: myproject/urls.py
 
-    from django.conf.urls import url
+    from django.urls import path
 
     from myapp.admin import admin_site
 

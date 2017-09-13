@@ -1302,8 +1302,8 @@ translations to existing site so that the current URLs won't change.
 
 Example URL patterns::
 
-    from django.conf.urls import include, url
     from django.conf.urls.i18n import i18n_patterns
+    from django.urls import include, url
 
     from about import views as about_views
     from news import views as news_views

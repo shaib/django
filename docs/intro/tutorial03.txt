@@ -118,7 +118,7 @@ The ``question_id='34'`` part comes from ``<int:question_id>``. Using parenthese
 around a pattern "captures" the text matched by that pattern and sends it as an
 argument to the view function. The ``:question_id>`` part of the string defines
 the name that will be used to identify the matched pattern, and the ``<int:``
-part is a conveter that determines what sorts of patterns should successfully
+part is a converter that determines what sorts of patterns should successfully
 match this part of the URL path.
 
 There's no need to add URL cruft such as ``.html`` -- unless you want to, in

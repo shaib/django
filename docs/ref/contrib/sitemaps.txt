@@ -283,9 +283,9 @@ Example
 Here's an example of a :doc:`URLconf </topics/http/urls>` using
 :class:`GenericSitemap`::
 
-    from django.conf.urls import url
     from django.contrib.sitemaps import GenericSitemap
     from django.contrib.sitemaps.views import sitemap
+    from django.urls import path
     from blog.models import Entry
 
     info_dict = {
@@ -328,8 +328,8 @@ the ``location`` method of the sitemap. For example::
             return reverse(item)
 
     # urls.py
-    from django.conf.urls import url
     from django.contrib.sitemaps.views import sitemap
+    from django.urls import path
 
     from .sitemaps import StaticViewSitemap
     from . import views

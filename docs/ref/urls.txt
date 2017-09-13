@@ -5,7 +5,21 @@
 .. module:: django.urls.conf
     :synopsis: Functions for use in URLconfs.
 
-.. currentmodule:: django.conf.urls
+.. currentmodule:: django.urls
+
+``path()``
+==========
+
+.. function:: path(regex, view, kwargs=None, name=None)
+
+...
+
+``re_path()``
+=============
+
+.. function:: re_path(regex, view, kwargs=None, name=None, converters=None)
+
+...
 
 ``include()``
 =============
@@ -87,7 +101,7 @@ escape the backslash with another backslash.
 
 The ``view`` parameter is a view function or the result of
 :meth:`~django.views.generic.base.View.as_view` for class-based views. It can
-also be an :func:`include`.
+also be an :func:`django.urls.include`.
 
 The ``kwargs`` parameter allows you to pass additional arguments to the view
 function or method. See :ref:`views-extra-options` for an example.

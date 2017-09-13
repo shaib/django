@@ -44,7 +44,7 @@ algorithm the system follows to determine which Python code to execute:
    :setting:`ROOT_URLCONF` setting.
 
 2. Django loads that Python module and looks for the variable
-   ``urlpatterns``. This should be a Python list of :func:`django.conf.urls.url`
+   ``urlpatterns``. This should be a Python list of :func:`django.urls.path`
    instances.
 
 3. Django runs through each URL pattern, in order, and stops at the first
@@ -284,14 +284,12 @@ itself. It includes a number of other URLconfs::
         # ... snip ...
     ]
 
-Note that the regular expressions in this example don't have a ``$``
-(end-of-string match character) but do include a trailing slash. Whenever
-Django encounters ``include()`` (:func:`django.conf.urls.include()`), it chops
-off whatever part of the URL matched up to that point and sends the remaining
+Whenever Django encounters ``path()`` (:func:`django.urls.path`), it chops off
+whatever part of the URL matched up to that point and sends the remaining
 string to the included URLconf for further processing.
 
 Another possibility is to include additional URL patterns by using a list of
-:func:`~django.conf.urls.url` instances. For example, consider this URLconf::
+:func:`~django.urls.path` instances. For example, consider this URLconf::
 
     from django.urls import include, path
 
@@ -406,9 +404,8 @@ options to views.
 Passing extra options to ``include()``
 --------------------------------------
 
-Similarly, you can pass extra options to :func:`~django.conf.urls.include`.
-When you pass extra options to ``include()``, *each* line in the included
-URLconf will be passed the extra options.
+Similarly, you can pass extra options to :func:`~django.urls.include` and
+*each* line in the included URLconf will be passed the extra options.
 
 For example, these two URLconf sets are functionally identical:
 
@@ -745,8 +742,8 @@ Application namespaces of included URLconfs can be specified in two ways.
 
 Firstly, you can set an ``app_name`` attribute in the included URLconf module,
 at the same level as the ``urlpatterns`` attribute. You have to pass the actual
-module, or a string reference to the module, to
-:func:`~django.conf.urls.include`, not the list of ``urlpatterns`` itself.
+module, or a string reference to the module, to :func:`~django.urls.include`,
+not the list of ``urlpatterns`` itself.
 
 .. snippet::
     :filename: polls/urls.py
@@ -799,6 +796,6 @@ This will include the nominated URL patterns into the given application
 namespace.
 
 The instance namespace can be specified using the ``namespace`` argument to
-:func:`~django.conf.urls.include`. If the instance namespace is not specified,
+:func:`~django.urls.include`. If the instance namespace is not specified,
 it will default to the included URLconf's application namespace. This means
 it will also be the default instance for that namespace.
