@@ -692,21 +692,3 @@ configured:
   or list.
 * **staticfiles.E002**: The :setting:`STATICFILES_DIRS` setting should not
   contain the :setting:`STATIC_ROOT` setting.
-
-URLs
-----
-
-The following checks are performed on your URL configuration:
-
-* **urls.W001**: Your URL pattern ``<pattern>`` uses
-  :func:`~django.urls.include` with a ``regex`` ending with a ``$``. Remove the
-  dollar from the ``regex`` to avoid problems including URLs.
-* **urls.W002**: Your URL pattern ``<pattern>`` has a ``regex``
-  beginning with a ``/``. Remove this slash as it is unnecessary.
-  If this pattern is targeted in an :func:`~django.urls.include`, ensure the
-  :func:`~django.urls.include` pattern has a trailing ``/``.
-* **urls.W003**: Your URL pattern ``<pattern>`` has a ``name``
-  including a ``:``. Remove the colon, to avoid ambiguous namespace
-  references.
-* **urls.E004**: Your URL pattern ``<pattern>`` is invalid. Ensure that
-  ``urlpatterns`` is a list of :func:`~django.urls.path()` instances.

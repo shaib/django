@@ -10,14 +10,14 @@
 ``path()``
 ==========
 
-.. function:: path(regex, view, kwargs=None, name=None)
+.. function:: path(route, view, kwargs=None, name=None)
 
 ...
 
 ``re_path()``
 =============
 
-.. function:: re_path(regex, view, kwargs=None, name=None, converters=None)
+.. function:: re_path(route, view, kwargs=None, name=None)
 
 ...
 
