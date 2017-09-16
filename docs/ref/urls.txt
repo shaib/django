@@ -97,7 +97,7 @@ This function registers a converter for use in path patterns passed to
 
 ``converter`` is a converter class -- a class with a ``regex`` attribute, and
 ``to_python()`` and ``to_url()`` methods. See
-:ref:`Defining URL type conversions<defining-url-type-conversions>`. XXX reference not yet defined.
+:ref:`Defining URL type conversions<defining-url-type-conversions>`.
 
 ``typename`` is the converter name to use in path patterns.
 
@@ -107,7 +107,7 @@ sure converters are registered before the URLconf is loaded. For example::
     from django.urls import path, register_converter
 
     from my_project.converters import CountryConverter
-    import .views
+    from . import views
 
     register_converter(CountryConverter, 'country')
 

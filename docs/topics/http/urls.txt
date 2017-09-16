@@ -53,23 +53,22 @@ algorithm the system follows to determine which Python code to execute:
    :setting:`ROOT_URLCONF` setting.
 
 2. Django loads that Python module and looks for the variable
-   ``urlpatterns``. This should be a Python list of :func:`django.urls.path`
-   instances.
+   ``urlpatterns``. This should be a Python list of path patterns (as
+   created by :func:`django.urls.path()` and :func:`django.urls.re_path()`).
 
-3. Django runs through each URL pattern, in order, and stops at the first
+3. Django runs through each path pattern, in order, and stops at the first
    one that matches the requested URL.
 
-4. Once one of the URL patterns matches, Django imports and calls the given
-   view, which is a simple Python function (or a :doc:`class-based view
-   </topics/class-based-views/index>`). The view gets passed the following
+4. Once one of the path patterns matches, Django calls the given
+   view, which is a Python callable. The view gets passed the following
    arguments:
 
    * An instance of :class:`~django.http.HttpRequest`.
-   * If the matched URL pattern returned no named groups, then the
-     matches from the regular expression are provided as positional arguments.
-   * The keyword arguments are made up of any named groups matched by the
-     path expression, overridden by any arguments specified in the optional
-     ``kwargs`` argument to :func:`django.urls.path`.
+   * Parameters extracted from the URL according to the pattern (see below
+     for details).
+   * Keyword arguments specified in the optional ``kwargs`` argument to the
+     path pattern. In case of conflict with the extracted parameters, the
+     kwargs take precedence.
 
 5. If no path expression matches, or if an exception is raised during any
    point in this process, Django invokes an appropriate
@@ -103,12 +102,9 @@ Notes:
 
 Example requests:
 
-* A request to ``/articles/2005/03/`` would match the third entry in the
+* A request to ``/articles/2005/3/`` would match the third entry in the
   list. Django would call the function
   ``views.month_archive(request, year=2005, month=3)``.
-
-* ``/articles/2005/3/`` would not match any URL patterns, because the
-  third entry in the list requires two digits for the month.
 
 * ``/articles/2003/`` would match the first pattern in the list, not the
   second one, because the patterns are tested in order, and the first one
@@ -119,8 +115,109 @@ Example requests:
 * ``/articles/2003`` would not match any of these patterns, because each
   pattern requires that the URL end with a slash.
 
-* ``/articles/2003/03/03/`` would match the final pattern. Django would call
+* ``/articles/2003/3/3/`` would match the final pattern. Django would call
   the function ``views.article_detail(request, year=2003, month=3, day=3)``.
+
+What the URLconf searches against
+=================================
+
+The URLconf searches against the path component of the requested URL, as a
+normal Python string. This does not include GET or POST parameters, or the
+domain name.
+
+For example, in requests to ``https://www.example.com/myapp/`` or to
+``https://www.example.com/myapp/?page=3``, the URLconf will look for
+``myapp/``.
+
+The URLconf doesn't look at the request method. In other words, all request
+methods -- ``POST``, ``GET``, ``HEAD``, etc. -- will be routed to the same
+view for the same URL.
+
+Path patterns
+=============
+
+Simple path patterns
+--------------------
+
+As seen above, path patterns are created by the :func:`django.urls.path()`
+function. The first argument to this function is a pattern, where placeholders
+for parameter values are specified using the ``<name>`` or ``<type:name>``
+syntax. When a ``<type:name>`` placeholder appears in the pattern, it is only
+considered a match if the part of the URL to matched against it actually fits
+the type. For example, given the above URLconf, the URL ``articles/Python/``
+would not match any of the patterns; in particular, it wouldn't match the
+second pattern, ``'articles/<int:year>/'``, because the string ``"Python"``
+cannot be interpreted as an ``int``.
+
+Technically, we refer to these types as "converters" -- since they specify how
+to convert the string from the URL into a parameter value. Django supports the
+following converters out of the box:
+
+* ``string`` -- Accepts any text without a slash (this is the default if no
+  converter is specified).
+
+* ``int`` -- Accepts sequences of digits and turns them into ints.
+
+* ``path`` -- Accepts any text.
+
+* ``slug`` -- Accepts ASCII-only slugs, based on the same definition as
+  :class:`~django.db.models.SlugField`.
+
+* ``uuid`` -- Accepts UUIDs in hexadecimal notation and turns them into UUIDs.
+
+In case you want finer control, you can define your own converters, or use
+regular-expression basd paths (see below).
+
+.. _defining-url-type-conversions:
+
+Definining type conversions
+---------------------------
+
+A converter is a class with one attribute and two methods.
+
+* ``regex`` -- The pattern to use in place of the type specifier.
+
+* ``to_python`` -- How to convert the string from the URL to a Python object.
+
+* ``to_url`` -- How to convert the Python object back to something suitable in
+  a URL.
+
+For instance, a converter for handling signed ``int`` parameters can be
+defined as follows::
+
+    class SignedIntConverter(object):
+        regex = '[+-]?[0-9]+'
+
+        def to_python(self, value):
+            return int(value)
+
+        def to_url(self, value):
+            return str(value)
+
+XXXXXXXXXXXXXX UNDER HERE UNREVIEWED XXXXXXXXXXXX
+
+``to_python`` is called as part of URL matching and resolution, whi
+``to_url`` will be called during ``reverse``.
+
+If ``to_python`` raises a ``ValueError``, it will be interpreted as if the
+given path does not match the URL, and resolving will continue. This gives the
+ability to deal with cases where the validity of the content can not easily or
+fully be described using a regular expression alone. No other exceptions are
+caught.
+
+The method ``to_url`` will always be called, no matter the type of ``value``.
+In particular, it will be called even when ``value`` is a string. This allows
+one to implement—for instance—a ``base64`` converter or a converter that works
+with signed values as handled by ``django.core.signing.TimestampSigner``. The
+return value of ``to_url`` must not be URL-encoded.
+
+Regular expression based paths
+------------------------------
+
+XXX NOT HERE XXX
+
+* ``/articles/2005/3/`` would not match any URL patterns, because the
+  third entry in the list requires two digits for the month.
 
 Named groups
 ============
@@ -177,22 +274,6 @@ vs. non-named groups in a regular expression:
 
 In both cases, any extra keyword arguments that have been given as per `Passing
 extra options to view functions`_ (below) will also be passed to the view.
-
-What the URLconf searches against
-=================================
-
-The URLconf searches against the requested URL, as a normal Python string. This
-does not include GET or POST parameters, or the domain name.
-
-For example, in a request to ``https://www.example.com/myapp/``, the URLconf
-will look for ``myapp/``.
-
-In a request to ``https://www.example.com/myapp/?page=3``, the URLconf will look
-for ``myapp/``.
-
-The URLconf doesn't look at the request method. In other words, all request
-methods -- ``POST``, ``GET``, ``HEAD``, etc. -- will be routed to the same
-function for the same URL.
 
 Captured arguments are always strings
 =====================================
