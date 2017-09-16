@@ -12,14 +12,23 @@
 
 .. function:: path(route, view, kwargs=None, name=None)
 
-...
+XXX
 
 ``re_path()``
 =============
 
 .. function:: re_path(route, view, kwargs=None, name=None)
 
-...
+XXX
+
+Document the URL converter API
+==============================
+
+to_url()/to_python()
+
+Explain the built-in converters.
+
+XXX (to be located elsewhere probably)
 
 ``include()``
 =============
@@ -44,7 +53,7 @@
     :arg module: URLconf module (or module name)
     :arg namespace: Instance namespace for the URL entries being included
     :type namespace: string
-    :arg pattern_list: Iterable of :func:`django.conf.urls.url` instances
+    :arg pattern_list: Iterable of :func:`django.urls.path`, :func:`django.urls.re_path`, and/or :func:`django.conf.urls.url` instances.
     :arg app_namespace: Application namespace for the URL entries being included
     :type app_namespace: string
     :arg instance_namespace: Instance namespace for the URL entries being included
@@ -81,6 +90,8 @@ Helper function to return a URL pattern for serving files in debug mode::
 =========
 
 .. function:: url(regex, view, kwargs=None, name=None)
+
+XXX Rewrite this and move some of it to path() XXX
 
 ``urlpatterns`` should be a list of ``path()`` instances. For example::
 

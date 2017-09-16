@@ -335,8 +335,10 @@ The :func:`~django.urls.path` function is passed four arguments, two required:
 ``path_string`` and ``view``, and two optional: ``kwargs``, and ``name``.
 At this point, it's worth reviewing what these arguments are for.
 
-:func:`~django.urls.path` argument: regex
----------------------------------------------
+:func:`~django.urls.path` argument: route
+-----------------------------------------
+
+XXX
 
 The term "regex" is a commonly used short form meaning "regular expression",
 which is a syntax for matching patterns in strings, or in this case, url
@@ -363,8 +365,10 @@ aren't too complex as noted above).
 
 .. _Wikipedia's entry: https://en.wikipedia.org/wiki/Regular_expression
 
-:func:`~django.conf.urls.url` argument: view
---------------------------------------------
+:func:`~django.urls.path` argument: view
+----------------------------------------
+
+XXX
 
 When Django finds a regular expression match, Django calls the specified view
 function, with an :class:`~django.http.HttpRequest` object as the first
@@ -373,14 +377,14 @@ arguments. If the regex uses simple captures, values are passed as positional
 arguments; if it uses named captures, values are passed as keyword arguments.
 We'll give an example of this in a bit.
 
-:func:`~django.conf.urls.url` argument: kwargs
-----------------------------------------------
+:func:`~django.urls.path` argument: kwargs
+------------------------------------------
 
 Arbitrary keyword arguments can be passed in a dictionary to the target view. We
 aren't going to use this feature of Django in the tutorial.
 
-:func:`~django.conf.urls.url` argument: name
----------------------------------------------
+:func:`~django.urls.path` argument: name
+----------------------------------------
 
 Naming your URL lets you refer to it unambiguously from elsewhere in Django,
 especially from within templates. This powerful feature allows you to make

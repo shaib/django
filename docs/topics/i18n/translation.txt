@@ -1012,7 +1012,7 @@ The ``JavaScriptCatalog`` view
         from django.conf.urls.i18n import i18n_patterns
 
         urlpatterns = i18n_patterns(
-            path(r'jsi18n/', JavaScriptCatalog.as_view(), name='javascript-catalog'),
+            path('jsi18n/', JavaScriptCatalog.as_view(), name='javascript-catalog'),
         )
 
 The precedence of translations is such that the packages appearing later in the

@@ -46,6 +46,11 @@ be compatible with Django 2.0.
 What's new in Django 2.0
 ========================
 
+Simplified URL routing syntax
+-----------------------------
+
+XXXX
+
 Minor features
 --------------
 

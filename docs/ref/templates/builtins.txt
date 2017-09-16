@@ -1115,11 +1115,12 @@ hard-code URLs in your templates::
 
     {% url 'some-url-name' v1 v2 %}
 
-The first argument is a :func:`~django.conf.urls.url` ``name``. It can be a
-quoted literal or any other context variable. Additional arguments are optional
-and should be space-separated values that will be used as arguments in the URL.
-The example above shows passing positional arguments. Alternatively you may
-use keyword syntax::
+The first argument is a :func:`~django.urls.path` (or
+:func:`~django.urls.re_path`) ``name``. It can be a quoted literal or any other
+context variable. Additional arguments are optional and should be
+space-separated values that will be used as arguments in the URL. The example
+above shows passing positional arguments. Alternatively you may use keyword
+syntax::
 
     {% url 'some-url-name' arg1=v1 arg2=v2 %}
 
@@ -1179,7 +1180,7 @@ by the context as to the current application.
 
 .. warning::
 
-    Don't forget to put quotes around the :func:`~django.conf.urls.url`
+    Don't forget to put quotes around the :func:`~django.urls.path`
     ``name``, otherwise the value will be interpreted as a context variable!
 
 .. templatetag:: verbatim

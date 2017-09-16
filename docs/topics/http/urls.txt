@@ -60,7 +60,7 @@ algorithm the system follows to determine which Python code to execute:
      matches from the regular expression are provided as positional arguments.
    * The keyword arguments are made up of any named groups matched by the
      path expression, overridden by any arguments specified in the optional
-     ``kwargs`` argument to :func:`django.conf.urls.url`.
+     ``kwargs`` argument to :func:`django.urls.path`.
 
 5. If no path expression matches, or if an exception is raised during any
    point in this process, Django invokes an appropriate
@@ -133,10 +133,10 @@ Here's the above example URLconf, rewritten to use named groups::
     from . import views
 
     urlpatterns = [
-        path(r'^articles/2003/$', views.special_case_2003),
-        path(r'^articles/<year>[0-9]{4})/$', views.year_archive),
-        path(r'^articles/(?P<year>[0-9]{4})/(?P<month>[0-9]{2})/$', views.month_archive),
-        path(r'^articles/(?P<year>[0-9]{4})/(?P<month>[0-9]{2})/(?P<day>[0-9]{2})/$', views.article_detail),
+        path('articles/2003/', views.special_case_2003),
+        path('articles/<year>[0-9]{4})/', views.year_archive),
+        path('articles/(?P<year>[0-9]{4})/(?P<month>[0-9]{2})/', views.month_archive),
+        path('articles/(?P<year>[0-9]{4})/(?P<month>[0-9]{2})/(?P<day>[0-9]{2})/', views.article_detail),
     ]
 
 This accomplishes exactly the same thing as the previous example, with one
@@ -233,8 +233,8 @@ accessed. This makes the system blazingly fast.
 Syntax of the ``urlpatterns`` variable
 ======================================
 
-``urlpatterns`` should be a Python list of :func:`~django.conf.urls.url`
-instances.
+``urlpatterns`` should be a Python list of :func:`~django.urls.path`,
+:func:`~django.urls.re_path`, and/or :func:`django.conf.urls.url` instances.
 
 Error handling
 ==============
@@ -316,10 +316,10 @@ prefix is used repeatedly. For example, consider this URLconf::
     from . import views
 
     urlpatterns = [
-        path('<page_slug>-<page_id>/history/$', views.history),
-        path('<page_slug>-<page_id>/edit/$', views.edit),
-        path('<page_slug>-<page_id>/discuss/$', views.discuss),
-        path('<page_slug>-<page_id>/permissions/$', views.permissions),
+        path('<page_slug>-<page_id>/history/', views.history),
+        path('<page_slug>-<page_id>/edit/', views.edit),
+        path('<page_slug>-<page_id>/discuss/', views.discuss),
+        path('<page_slug>-<page_id>/permissions/', views.permissions),
     ]
 
 We can improve this by stating the common path prefix only once and grouping
@@ -330,10 +330,10 @@ the suffixes that differ::
 
     urlpatterns = [
         path('<page_slug>-<page_id>/', include([
-            path(r'history/', views.history),
-            path(r'edit/', views.edit),
-            path(r'discuss/', views.discuss),
-            path(r'permissions/', views.permissions),
+            path('history/', views.history),
+            path('edit/', views.edit),
+            path('discuss/', views.discuss),
+            path('permissions/', views.permissions),
         ])),
     ]
 
@@ -372,7 +372,7 @@ Passing extra options to view functions
 URLconfs have a hook that lets you pass extra arguments to your view functions,
 as a Python dictionary.
 
-The :func:`django.conf.urls.url` function can take an optional third argument
+The :func:`django.urls.path` function can take an optional third argument
 which should be a dictionary of extra keyword arguments to pass to the view
 function.
 
@@ -769,9 +769,10 @@ not the list of ``urlpatterns`` itself.
 The URLs defined in ``polls.urls`` will have an application namespace ``polls``.
 
 Secondly, you can include an object that contains embedded namespace data. If
-you ``include()`` a list of :func:`~django.conf.urls.url` instances,
-the URLs contained in that object will be added to the global namespace.
-However, you can also ``include()`` a 2-tuple containing::
+you ``include()`` a list of :func:`~django.urls.path` (or
+:func:`~django.urls.re_path`)  instances, the URLs contained in that object
+will be added to the global namespace. However, you can also ``include()`` a
+2-tuple containing::
 
     (<list of path() instances>, <application namespace>)
 
