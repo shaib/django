@@ -12,23 +12,109 @@
 
 .. function:: path(route, view, kwargs=None, name=None)
 
-XXX
+.. versionadded:: 2.0
+
+Returns an element for inclusion in ``urlpatterns``. For example::
+
+    from django.urls import include, path
+
+    urlpatterns = [
+        path('index/', index_view, name='main-view'),
+        path('personal/<username>/', views.personal_page),
+        path('articles/<slug:title>/', views.article),
+        path('articles/<slug:title>/<int:section>/', views.section),
+        path('weblog/', include('blog.urls')),
+        ...
+    ]
+
+The ``route`` parameter should be a string or
+:func:`~django.utils.translation.gettext_lazy()` (see
+:ref:`translating-urlpatterns`) that contains a URL path pattern. A pattern is
+a prefix of the path to be matched, but it may also pick parts of the path to
+be captured and passed as parameters to the view when a match is made. Such
+parts, or fields, are specified by a name in angled brackets (like
+``<username>`` above), with an optional converter specification (like
+``<int:section>``). Where converters are specified, they also imply a format
+for the field -- e.g. ``<int:section>`` will only match a string of decimal
+digits. See :ref:`How Django processes a
+request<how-django-processes-a-request>` for further discussion.
+
+The ``view`` parameter is a view function or the result of
+:meth:`~django.views.generic.base.View.as_view` for class-based views. It can
+also be an :func:`django.urls.include`.
+
+The ``kwargs`` parameter allows you to pass additional arguments to the view
+function or method. See :ref:`views-extra-options` for an example.
+
+See :ref:`Naming URL patterns <naming-url-patterns>` for why the ``name``
+parameter is useful.
 
 ``re_path()``
 =============
 
 .. function:: re_path(route, view, kwargs=None, name=None)
 
-XXX
+.. versionadded:: 2.0
 
-Document the URL converter API
-==============================
+Returns an element for inclusion in ``urlpatterns``. For example::
 
-to_url()/to_python()
+    from django.urls import include, re_path
 
-Explain the built-in converters.
+    urlpatterns = [
+        re_path(r'^index/$', index_view, name='main-view'),
+        re_path(r'^personal/(?P<username>\w+)/$', views.personal_page),
+        re_path(r'^weblog/', include('blog.urls')),
+        ...
+    ]
 
-XXX (to be located elsewhere probably)
+The ``route`` parameter should be a string or
+:func:`~django.utils.translation.gettext_lazy()` (see
+:ref:`translating-urlpatterns`) that contains a regular expression compatible
+with Python's :py:mod:`re` module. Strings typically use raw string syntax
+(``r''``) so that they can contain sequences like ``\d`` without the need to
+escape the backslash with another backslash. When a match is made, captured
+groups from the regular expression are passed to the view -- as named arguments
+if the groups are named, and as positional arguments otherwise; the values are
+passed as strings, with no type conversion.
+
+The ``view``, ``kwargs`` and ``name`` parameters are the same as for :func:`~django.urls.path()`.
+
+.. versionchanged:: 2.0
+
+   :func:`django.conf.urls.url()` has been replaced by
+   :func:`django.urls.re_path()`. The old name is kept for backwards
+   compatibility, as a shim for the new function.
+
+``register_converter()``
+========================
+
+.. function:: register_converter(converter, typename)
+
+.. versionadded:: 2.0
+
+This function registers a converter for use in path patterns passed to
+:func:`~django.urls.path()`.
+
+``converter`` is a converter class -- a class with a ``regex`` attribute, and
+``to_python()`` and ``to_url()`` methods. See
+:ref:`Defining URL type conversions<defining-url-type-conversions>`. XXX reference not yet defined.
+
+``typename`` is the converter name to use in path patterns.
+
+Users are expected to call register_converter in their URLconf module, to make
+sure converters are registered before the URLconf is loaded. For example::
+
+    from django.urls import path, register_converter
+
+    from my_project.converters import CountryConverter
+    import .views
+
+    register_converter(CountryConverter, 'country')
+
+    urlpatterns = [
+        path('events/<country:where>/', views.region_events)
+        ...
+    ]
 
 ``include()``
 =============
@@ -91,34 +177,11 @@ Helper function to return a URL pattern for serving files in debug mode::
 
 .. function:: url(regex, view, kwargs=None, name=None)
 
-XXX Rewrite this and move some of it to path() XXX
+.. versionchanged:: 2.0
 
-``urlpatterns`` should be a list of ``path()`` instances. For example::
-
-    from django.urls import include, path
-
-    urlpatterns = [
-        path('index/', index_view, name='main-view'),
-        path('weblog/', include('blog.urls')),
-        ...
-    ]
-
-The ``regex`` parameter should be a string or
-:func:`~django.utils.translation.gettext_lazy()` (see
-:ref:`translating-urlpatterns`) that contains a regular expression compatible
-with Python's :py:mod:`re` module. Strings typically use raw string syntax
-(``r''``) so that they can contain sequences like ``\d`` without the need to
-escape the backslash with another backslash.
-
-The ``view`` parameter is a view function or the result of
-:meth:`~django.views.generic.base.View.as_view` for class-based views. It can
-also be an :func:`django.urls.include`.
-
-The ``kwargs`` parameter allows you to pass additional arguments to the view
-function or method. See :ref:`views-extra-options` for an example.
-
-See :ref:`Naming URL patterns <naming-url-patterns>` for why the ``name``
-parameter is useful.
+This function has been replaced by :func:`django.urls.re_path()`, which has the
+same interface and semantics. It has not been formally deprecated, for major
+backwards-compatibility concerns, but will be deprecated at some future point.
 
 ``handler400``
 ==============
