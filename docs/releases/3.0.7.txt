@@ -25,3 +25,7 @@ Bugfixes
 
 * Fixed a regression in Django 3.0 where all resolved ``Subquery()``
   expressions were considered equal (:ticket:`31607`).
+
+* Fixed a regression in Django 2.2.12 that affected translation loading for
+  apps providing translations for only a subset of all supported languages
+  (:ticket:`31570`).
