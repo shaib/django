@@ -420,12 +420,14 @@ class TranslationLoadingTests(SimpleTestCase):
             ('en_NZ', 'kiwi'),
             ('en_CA', 'canuck'),
         ]
-        # All translations are loaded by the second pass.
-        for rnd in range(1, 3):
-            for language, nickname in tests:
-                with self.subTest(language=language, round=rnd):
-                    activate(language)
-                    self.assertEqual(gettext('local country person'), nickname)
+        # First load all relevant translations
+        for language, _ in tests:
+            activate(language)
+        # Then verify they are loaded correctly
+        for language, nickname in tests:
+            with self.subTest(language=language):
+                activate(language)
+                self.assertEqual(gettext('local country person'), nickname)
 
 
 class TranslationThreadSafetyTests(SimpleTestCase):
