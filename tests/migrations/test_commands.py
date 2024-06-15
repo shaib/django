@@ -3469,6 +3469,25 @@ class SquashMigrationsTests(MigrationTestBase):
             "squashmigrations", "migrations", "0002", interactive=False
         )
 
+    @override_settings(
+        INSTALLED_APPS=[
+            "migrations.migrations_test_apps.alter_fk.author_app",
+            "migrations.migrations_test_apps.alter_fk.book_app",
+        ]
+    )
+    def test_squashmigrations_ignore_dependencies_alter_relation_multi_apps(self):
+        with self.temporary_migration_module(
+                module="migrations.migrations_test_apps.alter_fk.book_app"):
+            call_command(
+                "squashmigrations",
+                "book_app",
+                "0001",
+                "0002",
+                interactive=False,
+                ignore_dependencies=True,
+                verbosity=0,
+            )
+
 
 class AppLabelErrorTests(TestCase):
     """

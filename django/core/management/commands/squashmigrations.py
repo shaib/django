@@ -5,11 +5,12 @@ from django.apps import apps
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.core.management.utils import run_formatters
-from django.db import migrations
+from django.db import migrations, models
 from django.db.migrations.loader import AmbiguityError, MigrationLoader
 from django.db.migrations.migration import SwappableTuple
 from django.db.migrations.optimizer import MigrationOptimizer
 from django.db.migrations.writer import MigrationWriter
+from django.db.migrations.operations.base import OperationCategory
 
 
 class Command(BaseCommand):
@@ -34,6 +35,14 @@ class Command(BaseCommand):
         parser.add_argument(
             "migration_name",
             help="Migrations will be squashed until and including this migration.",
+        )
+        parser.add_argument(
+            "--ignore-dependencies",
+            "--ignore-deps",
+            action="store_false",
+            dest="ignore_dependencies",
+            help="Ignore dependencies, except for those included in the"
+            " initial migration.",
         )
         parser.add_argument(
             "--no-optimize",
@@ -64,6 +73,7 @@ class Command(BaseCommand):
         app_label = options["app_label"]
         start_migration_name = options["start_migration_name"]
         migration_name = options["migration_name"]
+        ignore_dependencies = options["ignore_dependencies"]
         no_optimize = options["no_optimize"]
         squashed_name = options["squashed_name"]
         include_header = options["include_header"]
@@ -139,8 +149,31 @@ class Command(BaseCommand):
         # We need to take all dependencies from the first migration in the list
         # as it may be 0002 depending on 0001
         first_migration = True
+        ignore_restricted_categories = set([
+            OperationCategory.ADDITION,
+            OperationCategory.ALTERATION
+        ])
+
+
         for smigration in migrations_to_squash:
+
+
+            if not first_migration and ignore_dependencies:
+                filtered_operations = []
+
+                for operation in smigration.operations:
+                    if (operation.category in ignore_restricted_categories
+                    and isinstance(operation.field, models.fields.related.RelatedField)):
+                        #and operation field app_label != app_label:
+                        continue
+
+                    filtered_operations.append(operation)
+
+                operations.extend(filtered_operations)
+                continue
+
             operations.extend(smigration.operations)
+
             for dependency in smigration.dependencies:
                 if isinstance(dependency, SwappableTuple):
                     if settings.AUTH_USER_MODEL == dependency.setting:
@@ -149,6 +182,7 @@ class Command(BaseCommand):
                         dependencies.add(dependency)
                 elif dependency[0] != smigration.app_label or first_migration:
                     dependencies.add(dependency)
+
             first_migration = False
 
         if no_optimize:
