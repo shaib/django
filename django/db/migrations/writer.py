@@ -1,5 +1,6 @@
 import os
 import re
+from contextlib import contextmanager
 from importlib import import_module
 
 from django import get_version
@@ -20,6 +21,7 @@ class OperationWriter:
         self.operation = operation
         self.buff = []
         self.indentation = indentation
+        self.comment_out_indentation = None
 
     def serialize(self):
         def _write(_arg_name, _arg_value):
@@ -108,8 +110,26 @@ class OperationWriter:
     def unindent(self):
         self.indentation -= 1
 
+    def start_comment_out(self):
+        self.comment_out_indentation = self.indentation
+
+    def end_comment_out(self):
+        self.comment_out_indentation = None
+
+    @contextmanager
+    def commenting_out(self):
+        self.start_comment_out()
+        yield
+        self.end_comment_out()
+
     def feed(self, line):
-        self.buff.append(" " * (self.indentation * 4) + line)
+        preamble = " " * (self.indentation * 4)
+        if self.comment_out_indentation is not None:
+            preamble = (
+                " " * (self.comment_out_indentation * 4) + "# " +
+                (self.indentation - self.comment_out_indentation) * 4 * " "
+            )
+        self.buff.append(preamble + line)
 
     def render(self):
         return "\n".join(self.buff)
