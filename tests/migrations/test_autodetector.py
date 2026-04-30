@@ -2861,6 +2861,7 @@ class AutodetectorTests(BaseAutodetectorTests):
                 "constraints": [],
                 "managed": False,
                 "old_app_label": "testapp",
+                "old_model_name": "author",
             },
         )
         self.assertMigrationDependencies(
