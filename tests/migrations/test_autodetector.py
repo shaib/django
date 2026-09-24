@@ -3195,6 +3195,56 @@ class AutodetectorTests(BaseAutodetectorTests):
         )
         self.assertOperationTypes(changes, "testapp", 1, ["DeleteModel"])
 
+    def test_move_model_preserves_model_options(self):
+        before = [
+            ModelState(
+                "testapp",
+                "Author",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    ("name", models.CharField(max_length=200)),
+                ],
+                options={"verbose_name": "Verbose Author"},
+            ),
+        ]
+        after = [
+            ModelState(
+                "targetapp",
+                "Author",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    ("name", models.CharField(max_length=200)),
+                ],
+                options={"verbose_name": "Verbose Author"},
+            ),
+        ]
+
+        changes = self.get_changes(
+            before, after, MigrationQuestioner({"ask_move_model": True})
+        )
+        self.assertNumberMigrations(changes, "otherapp", 2)
+
+        self.assertOperationTypes(changes, "otherapp", 1, ["AlterModelOptions"])
+        self.assertOperationAttributes(
+            changes,
+            "otherapp",
+            1,
+            0,
+            verbose_name="Verbose Author",
+        )
+
+        self.assertNumberMigrations(changes, "testapp", 2)
+
+        self.assertOperationTypes(changes, "testapp", 0, ["AlterModelOptions"])
+        self.assertOperationAttributes(
+            changes,
+            "testapp",
+            0,
+            0,
+            managed=False,
+            verbose_name="Verbose Author",
+        )
+
     def test_move_mti_models_operations(self):
         before = [self.author_name, self.aardvark_based_on_author]
         after = [
