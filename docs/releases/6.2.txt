@@ -42,6 +42,12 @@ and ``RemovedInDjango71Warning`` becomes ``RemovedInDjango2029Warning``.
 
 .. _DEP 20: https://github.com/django/deps/blob/main/accepted/0020-annual-release-cycle.rst
 
+Moving models between apps
+--------------------------
+
+The migration framework now detects and supports moving models between
+apps. See :ref:`moving-model-between-apps` for details.
+
 Minor features
 --------------
 
