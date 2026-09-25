@@ -1,3 +1,4 @@
+import itertools
 import os
 import shutil
 
@@ -8,11 +9,11 @@ from django.core.management.utils import run_formatters
 from django.db import migrations, models
 from django.db.migrations.loader import AmbiguityError, MigrationLoader
 from django.db.migrations.migration import SwappableTuple
-from django.db.migrations.optimizer import MigrationOptimizer
-from django.db.migrations.writer import MigrationWriter
 from django.db.migrations.operations.base import OperationCategory
 from django.db.migrations.operations.fields import FieldOperation
 from django.db.migrations.operations.models import ModelOperation
+from django.db.migrations.optimizer import MigrationOptimizer
+from django.db.migrations.writer import MigrationWriter
 
 
 class Command(BaseCommand):
@@ -43,7 +44,7 @@ class Command(BaseCommand):
             "--ignore-deps",
             action="store_true",
             dest="ignore_dependencies",
-            help="Ignore dependencies, except for those included in the"
+            help="Ignore external dependencies, except for those included in the"
             " initial migration.",
         )
         parser.add_argument(
@@ -131,6 +132,14 @@ class Command(BaseCommand):
             for migration in migrations_to_squash:
                 self.stdout.write(" - %s" % migration.name)
 
+            if ignore_dependencies:
+                self.stdout.write(
+                    self.style.NOTICE(
+                        "To avoid cross-app dependencies, operations "
+                        "creating such dependencies will be ignored."
+                    )
+                )
+
             if self.interactive:
                 answer = None
                 while not answer or answer not in "yn":
@@ -145,41 +154,28 @@ class Command(BaseCommand):
 
         # Load the operations from all those migrations and concat together,
         # along with collecting external dependencies and detecting
-        # double-squashing
-        operations = []
-        dependencies = set()
-        # We need to take all dependencies from the first migration in the list
-        # as it may be 0002 depending on 0001
-        first_migration = True
+        # double-squashing.
+        # First collect all operations
+        operations = list(
+            itertools.chain.from_iterable(m.operations for m in migrations_to_squash)
+        )
+        # Dependencies for the first migration are always incliuded
+        dependencies = set(migrations_to_squash[0].dependencies)
 
-        for smigration in migrations_to_squash:
-
-            if not first_migration and ignore_dependencies:
-                filtered_operations = self.filter_multi_app_operations(
-                    smigration.app_label, smigration.operations
-                )
-
-                operations.extend(filtered_operations)
-            else:
-                operations.extend(smigration.operations)
-
+        # Collect dependencies
+        for smigration in migrations_to_squash[1:]:
             for dependency in smigration.dependencies:
                 if isinstance(dependency, SwappableTuple):
-                    if settings.AUTH_USER_MODEL == dependency.setting:
-                        dependencies.add(("__setting__", "AUTH_USER_MODEL"))
-                    elif (
-                        not ignore_dependencies
-                        and not first_migration
-                        and dependency.setting.split(".")[0] == smigration.app_label
-                    ):
-                        dependencies.add(dependency)
-                elif (
-                    not ignore_dependencies
-                    and (dependency[0] != smigration.app_label or first_migration)
-                ) or (ignore_dependencies and first_migration):
+                    # This is a dependency we probably want to preserve
                     dependencies.add(dependency)
-
-            first_migration = False
+                else:
+                    mig_app_label, mig_name = dependency
+                    if mig_app_label == app_label:
+                        # Internal dependency -- we want to add unless it is being squashed
+                        if mig_name not in (m.name for m in migrations_to_squash):
+                            dependencies.add(dependency)
+                    elif not ignore_dependencies:
+                        dependencies.add(dependency)
 
         if no_optimize:
             if self.verbosity > 0:
@@ -203,6 +199,18 @@ class Command(BaseCommand):
                         % (len(operations), len(new_operations))
                     )
 
+        if ignore_dependencies:
+            # filter operations
+            # In principle, no need to filter ops from first migration
+            # but after optimization, some of them may already be gone...
+            # so need to identify not by their number, but by presence
+            # in the list of operations
+            # (assuming optimizer doesn't change ids)
+            # ---> Optimizer does change ids.
+            # ---> We can identify them by the dependencies. Any operation
+            #      with external dependencies included in those of the first
+            #      migration, can stay
+            self.filter_cross_app_operations(app_label, new_operations)
         replaces = [(m.app_label, m.name) for m in migrations_to_squash]
 
         # Make a new migration with those operations
@@ -289,7 +297,7 @@ class Command(BaseCommand):
                 ):
                     return True
 
-    def filter_multi_app_operations(self, app_label, operations):
+    def filter_cross_app_operations(self, app_label, operations):
         filtered_operations = []
         ignore_restricted_categories = set(
             [OperationCategory.ADDITION, OperationCategory.ALTERATION]
